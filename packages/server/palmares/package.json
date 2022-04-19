@@ -1,0 +1,26 @@
+{
+    "name": "palmares",
+    "version": "0.0.0",
+    "description": "This is the framework we use for the backend, we've created it to be as simple as possible, it uses express and it is HEAVILY inspired by Django.",
+    "main": "index.js",
+    "keywords": [
+        "reglow",
+        "palmares"
+    ],
+    "scripts": {
+        "startapp": "pm2 kill && pm2 start config/ecosystem.config.js --only palmares_development --no-daemon",
+        "makemigrations": "node commands/makemigrations.js",
+        "migrate": "node commands/migrate.js"
+    },
+    "author": "Reflow Desenvolvimento de Software LTDA",
+    "license": "ISC",
+    "dependencies": {
+        "express": "^4.17.2",
+        "ioredis": "^4.28.2",
+        "pg": "^8.7.1",
+        "pg-hstore": "^2.3.4",
+        "pm2": "^5.1.2",
+        "readline-sync": "^1.4.10",
+        "sequelize": "^6.12.2"
+    }
+}
