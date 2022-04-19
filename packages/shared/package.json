@@ -1,0 +1,24 @@
+{
+  "name": "shared",
+  "version": "0.0.0",
+  "description": "This is the shared folder of the hole aplication",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "shared",
+    "backend",
+    "and",
+    "frontend",
+    "back",
+    "front",
+    "teaut"
+  ],
+  "author": "Nicolas Leal",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.26.1",
+    "esprima": "^4.0.1"
+  }
+}

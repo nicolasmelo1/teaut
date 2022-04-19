@@ -1,0 +1,16 @@
+{
+  "name": "server",
+  "version": "0.0.0",
+  "description": "This holds all of the backend of teaut and is responsible for the apis only",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "backend",
+    "teaut",
+    "server"
+  ],
+  "author": "Nicolas Leal",
+  "license": "ISC"
+}

@@ -18,6 +18,10 @@
     "@codemirror/language": "^0.19.10",
     "@codemirror/state": "^0.19.9",
     "@codemirror/view": "^0.19.48",
+    "@fortawesome/fontawesome-svg-core": "^6.1.1",
+    "@fortawesome/free-regular-svg-icons": "^6.1.1",
+    "@fortawesome/free-solid-svg-icons": "^6.1.1",
+    "@fortawesome/react-fontawesome": "^0.1.18",
     "axios": "^0.26.1",
     "next": "12.1.5",
     "react": "18.0.0",
@@ -26,6 +30,8 @@
     "styled-components": "^5.3.5"
   },
   "devDependencies": {
+    "@colin_t/lezer-tree-visualizer": "^0.2.1",
+    "babel-plugin-styled-components": "^2.0.7",
     "eslint": "8.13.0",
     "eslint-config-next": "12.1.5"
   }

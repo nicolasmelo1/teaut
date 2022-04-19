@@ -7,8 +7,9 @@ const { Engine, DatabaseConnectionError } = require('./engine')
 const models = require('../models')
 
 /**
- * Offers a initial translation engine from Reflow database and reflow common setup language for databases
- * to sequelize, it is not supposed to implement, at the current time, how you handle queries, and all that stuff.
+ * Offers a initial translation engine from Palmares database and palmares common 
+ * setup language for databases to sequelize, it is not supposed to implement, at 
+ * the current time, how you handle queries, and all that stuff.
  * 
  * For that stuff you will be dealing with the ORM by itself.
  */

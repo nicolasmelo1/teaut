@@ -1,7 +1,7 @@
 const { retrieveMigrations, initializedStateModelsByModelName } = require('../helpers')
 const { initialize } = require('../index')
 const { reorderMigrations } = require('./order')
-const { ReflowMigrations } = require('./migrations')
+const { PalmaresMigrations } = require('./migrations')
 const actions = require('./actions')
 const logger = require('../../logging')
 const models = require('../models')
@@ -12,31 +12,31 @@ const getState = require('./state')
  * of the runned migrations, and otherwise create the table in a migration.
  * 
  * @param {Engine} engineInstance - A Engine class instance object.
- * @param {object} internalModelsByModelName - An object of internal models by model name, right now the only internal model is ReflowMigration
+ * @param {object} internalModelsByModelName - An object of internal models by model name, right now the only internal model is PalmaresMigrations
  * but there can be others
  * 
- * @returns {String} - Returns an empty string or the actual last migration name.
+ * @returns {Promise<string>} - Returns an empty string or the actual last migration name.
  */
-const createReflowMigrationsTableAndGetLastMigrationName = async (engineInstance, internalModelsByModelName) => {
+const createPalmaresMigrationsTableAndGetLastMigrationName = async (engineInstance, internalModelsByModelName) => {
     await engineInstance.initializeMigrations()
-    const createReflowMigrationsTable = async (transaction) => {
+    async function createPalmaresMigrationsTable(transaction) {
         const action = new actions.CreateModel(
-            reflowMigrationsInstance.constructor.name, 
-            ReflowMigrations.attributes,
-            ReflowMigrations.options
+            palmaresMigrationsInstance.constructor.name, 
+            PalmaresMigrations.attributes,
+            PalmaresMigrations.options
         )
         await action.run(transaction, engineInstance, internalModelsByModelName, internalModelsByModelName)
     }
     
     let lastMigrationName = ''
     // create table that will store migrations if it does not exist
-    const reflowMigrationsInstance = new ReflowMigrations()
+    const palmaresMigrationsInstance = new PalmaresMigrations()
 
     try {
-        lastMigrationName = await ReflowMigrations.migration.getLastRunMigrationNameOrderedById()
+        lastMigrationName = await PalmaresMigrations.migration.getLastRunMigrationNameOrderedById()
     } catch (e) {
         console.log(e)
-        await engineInstance.transaction(createReflowMigrationsTable)
+        await engineInstance.transaction(createPalmaresMigrationsTable)
     }
     return lastMigrationName
 }
@@ -73,7 +73,7 @@ const runMigrationFile = async (toEngineInstance, fromEngineInstance, settings, 
         actionIndex++
     }
 
-    await ReflowMigrations.instance.create({
+    await PalmaresMigrations.instance.create({
         app: migration.appName, 
         migrationName: migration.migrationName
     })
@@ -94,16 +94,16 @@ const runMigrationFile = async (toEngineInstance, fromEngineInstance, settings, 
  * discard the changes and go backwards.
  * 
  * That's basically the hole idea of the automatic migrations, and then to run the migrations it's easy we have the actions just need to run each of them.
- * Also be aware that we create the `reflow_migrations` table to store the last runned migrations, this way it is a lot easier for us to work.
+ * Also be aware that we create the `palmares_migrations` table to store the last runned migrations, this way it is a lot easier for us to work.
  * 
  * This was done so it's easier and less of a pain to work with an ORM within this project. An ORM was needed because it keeps the database underneath the SQL, and 
  * work with raw sql can be a problem since we need to be aware of many underlying that can break the production app and also other security issues like SQL injection.
  * 
  * @param {object} settings - The settings file that will live in '.src/settings.js'
  */
-const migrate = async (settings) => {
-    const { engineInstance: toEngineInstance, internalModels } = initialize(settings, [ReflowMigrations])
-    const { engineInstance: fromEngineInstance } = initialize(settings, [ReflowMigrations])
+async function migrate(settings) {
+    const { engineInstance: toEngineInstance, internalModels } = initialize(settings, [PalmaresMigrations])
+    const { engineInstance: fromEngineInstance } = initialize(settings, [PalmaresMigrations])
 
     const internalModelsByModelName = {}
     
@@ -112,7 +112,7 @@ const migrate = async (settings) => {
     })
     let migrations = retrieveMigrations(settings)
     migrations = reorderMigrations(migrations)
-    const lastMigrationName = await createReflowMigrationsTableAndGetLastMigrationName(toEngineInstance, internalModelsByModelName)
+    const lastMigrationName = await createPalmaresMigrationsTableAndGetLastMigrationName(toEngineInstance, internalModelsByModelName)
 
     
     // We just filter the migrations that was not run yet this way we will just run the new migrations

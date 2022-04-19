@@ -1,10 +1,10 @@
 const models = require("../models")
 
-class ReflowMigrationsManager extends models.Manager {
+class PalmaresMigrationsManager extends models.Manager {
     /**
      * Gets the migration that had runned before, this is the last one that was generated.
      * 
-     * @returns {string} - Retrieves the last migration name that was runned.
+     * @returns {Promise<string>} - Retrieves the last migration name that was runned.
      */
     async getLastRunMigrationNameOrderedById() {
         const lastMigration = await this.instance.findOne({
@@ -31,7 +31,7 @@ class ReflowMigrationsManager extends models.Manager {
  * This is appended and dependant on SequelizeEngine at the current time but we will soon change 
  * it's dependencies to work on and well with any Engine.
  */
-class ReflowMigrations extends models.Model {
+class PalmaresMigrations extends models.Model {
     attributes = {
         createdAt: new models.fields.DatetimeField({autoNowAdd: true}),
         updatedAt: new models.fields.DatetimeField({autoNow: true}),
@@ -40,13 +40,13 @@ class ReflowMigrations extends models.Model {
     }
 
     options = {
-        tableName: 'reflow_migrations'
+        tableName: 'palmares_migrations'
     }
 
-    static migration = new ReflowMigrationsManager()
+    static migration = new PalmaresMigrationsManager()
 }
 
 
 module.exports = {
-    ReflowMigrations
+    PalmaresMigrations
 }
