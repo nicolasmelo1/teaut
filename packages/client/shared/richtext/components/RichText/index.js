@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react'
 import { generateUUID } from '../../../../../shared/utils'
+import { useBlocks } from '../../hooks'
 import Layout from './layouts'
 
 export default function RichText(props) {
     const isEditable = typeof props.isEditable === 'boolean'
     
-    const [data, setData] = useState({
+    const [richTextData, setRichTextData] = useState({
         uuid: generateUUID(),
         blocks: [
             {
@@ -15,7 +16,7 @@ export default function RichText(props) {
                 contents: [{
                     order: 0,
                     uuid: generateUUID(),
-                    text: '',
+                    text: 'I ',
                     textSize: 12,
                     isBold: false,
                     isItalic: false,
@@ -26,13 +27,35 @@ export default function RichText(props) {
                     markerColor: null,
                     textColor: null,
                     link: null
-                }]
+                },
+                {
+                    order: 1,
+                    uuid: generateUUID(),
+                    text: 'Love',
+                    textSize: 12,
+                    isBold: true,
+                    isItalic: false,
+                    isUnderline: false,
+                    isCode: false,
+                    customMetadata: {},
+                    latexEquation: null,
+                    markerColor: null,
+                    textColor: null,
+                    link: null
+                }
+                ]
             }
         ]
     })
     const [activeBlockUUID, setActiveBlockUUID] = useState(null)
     const [toolbarProps, setToolbarProps] = useState({})
     const toolbarComponent = useRef(null)
+
+    const {
+        onUpdateBlock,
+        onAddBlock,
+        onRemoveBlock
+    } = useBlocks(richTextData.blocks, (blocks) => setRichTextData({...richTextData, blocks}))
 
     /**
      * This function is responsible for registering the custom toolbar component and props of this toolbar.
@@ -73,7 +96,11 @@ export default function RichText(props) {
     return (
         <Layout
         isEditable={isEditable}
+        richTextData={richTextData}
         activeBlockUUID={activeBlockUUID}
+        onRemoveBlock={onRemoveBlock}
+        onUpdateBlock={onUpdateBlock}
+        onAddBlock={onAddBlock}
         onToggleActiveBlock={onToggleActiveBlock}
         retrieveCustomToolbarComponent={retrieveCustomToolbarComponent}
         registerToolbarComponentAndProps={registerToolbarComponentAndProps}
