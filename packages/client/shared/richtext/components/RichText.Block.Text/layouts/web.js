@@ -1,22 +1,28 @@
 import { webGetSelectionSelectCursorPosition } from '../utils'
+import Styled from '../styles'
 
 export default function RichTextBlockTextWebLayout(props) {
     return (
-        <div
+        <Styled.TextContainer
+        ref={props.inputElementRef}
         spellCheck={true}
         draggable={false}
         suppressContentEditableWarning={true}
         contentEditable={true}
-        onSelect={(event) => {
-            const { start, end } = webGetSelectionSelectCursorPosition(event.target)
-            props.onUpdateCaretPosition(start, end)
-        }}
+        onCompositionStart={() => props.webOnUpdateIsInCompositionStatus(true)}
+        onCompositionEnd={() => props.webOnUpdateIsInCompositionStatus(false)}
+        onFocus={() => props.webOnUpdateElementFocused(true)}
+        onBlur={() => props.webOnUpdateElementFocused(false)}
         onInput={(e) => {
-            console.log(e.nativeEvent.inputType)
-            props.onChange(e.target.textContent)
+            if (e.nativeEvent.inputType.includes('delete')) {
+                const { start, end } = webGetSelectionSelectCursorPosition(e.target)
+                props.webOnUpdateCaretPosition(start, end)
+            }
+            setTimeout(() => props.webOnInput(e.target.textContent), 0)
         }}
-        >
-            {props.webGetInnerHTML()}
-        </div>
+        dangerouslySetInnerHTML={{
+            __html: props.webGetInnerHTML()
+        }}
+        />
     )
 }

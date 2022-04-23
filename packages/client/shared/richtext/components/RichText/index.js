@@ -42,8 +42,27 @@ export default function RichText(props) {
                     markerColor: null,
                     textColor: null,
                     link: null
-                }
-                ]
+                }]
+            },
+            {
+                uuid: generateUUID(),
+                blockTypeId: 1,
+                order: 1,
+                contents: [{
+                    order: 0,
+                    uuid: generateUUID(),
+                    text: 'Teste ',
+                    textSize: 12,
+                    isBold: false,
+                    isItalic: false,
+                    isUnderline: false,
+                    isCode: false,
+                    customMetadata: {},
+                    latexEquation: null,
+                    markerColor: null,
+                    textColor: null,
+                    link: null
+                }]
             }
         ]
     })
