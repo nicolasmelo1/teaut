@@ -25,6 +25,7 @@ export default function RichTextBlocks(props) {
         <Layout
         block={block}
         onUpdateBlock={onUpdateBlock}
+        onRemoveBlock={props.onRemoveBlock}
         />
     )
 }

@@ -1,7 +1,6 @@
 import Styled from '../styles'
 
 export default function RichTextBlockTextContentWebLayout(props) {
-    console.log(props.content)
     return (
         <Styled.Span
         draggabble="false"

@@ -7,6 +7,7 @@ export default function RichTextBlockWebLayout(props) {
             <RichTextBlockText
             block={props.block}
             onUpdateBlock={props.onUpdateBlock}
+            onRemoveBlock={props.onRemoveBlock}
             />
         </Styled.Container>
     )

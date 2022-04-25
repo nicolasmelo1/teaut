@@ -42,7 +42,7 @@ export default function useBlocks(blocks=[], onChangeBlocks=(blocks) => {}) {
 
         if (doesBlockOrderExist) return blockOrder
 
-        blockOrder = richTextData.blocks.findIndex(block => block.uuid === uuid)
+        blockOrder = blocks.findIndex(block => block.uuid === uuid)
         const doesBlockExist = typeof blockOrder === 'number' && blockOrder !== -1
         
         if (doesBlockExist) {
