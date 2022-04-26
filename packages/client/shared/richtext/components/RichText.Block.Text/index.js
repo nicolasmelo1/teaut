@@ -1,27 +1,29 @@
-import { useEffect, useState, useRef } from 'react'
-import { renderToString } from 'react-dom/server'
+import { useRef } from 'react'
 import { APP } from '../../../conf'
-import { webGetSelectionSelectCursorPosition } from './utils'
 import { generateUUID } from '../../../../../shared/utils'
-import RichTextBlockTextContent from '../RichText.Block.Text.Content'
 import Layout from './layouts'
 
 const DEFAULT_TEXT_SIZE = 12
 
-
 export default function RichTextBlockText(props) {
-    const isActiveElement = props.block.uuid === props.activeBlockUUID
-
     const toolbarStateRef = useRef({
-        isBold: false
+        isBold: false,
+        textSize: DEFAULT_TEXT_SIZE, 
+        isItalic: false, 
+        isUnderline: false, 
+        isCode: false, 
+        latexEquation: null, 
+        markerColor: null, 
+        textColor: null, 
+        link: null
     })
+    const toolbarObserverRef = useRef(() => {})
     const inputElementRef = useRef(null)
     const fullTextRef = useRef(retrieveFullText())
     const blockRef = useRef(props.block)
     const caretPositionRef = useRef({ start: 0, end: 0 })
     const previousCaretPositionRef = useRef(caretPositionRef.current)
-    const isInCompositionRef = useRef(false)
-    const isElementFocusedRef = useRef(isActiveElement)
+    const webIsInCompositionRef = useRef(false)
     const preventToUpdateCaretPositionOnSelectionChangeRef = useRef(false)
     const textCharacterIndexesByContentUUIDRef = useRef(retrieveContentCharacterIndexesByContentUUID())
 
@@ -72,12 +74,32 @@ export default function RichTextBlockText(props) {
             link
         }
     }
+
+    function registerToolbarStateObserver(toolbarObserver=()=>{}) {
+        toolbarObserverRef.current = toolbarObserver
+    }
     // TODO: TEMPORARY
-    function updateToolbarState() {
+    function onUpdateToolbarState({
+        isBold=undefined, textSize=undefined, isItalic=undefined, isUnderline=undefined, isCode=undefined,
+        latexEquation=undefined, markerColor=undefined, textColor=undefined, link=undefined
+    }={}) {
+        isBold = typeof isBold === 'boolean' ? isBold : toolbarStateRef.current.isBold
+        textSize = typeof textSize === 'number' ? textSize : toolbarStateRef.current.textSize
+        isItalic = typeof isItalic === 'boolean' ? isItalic : toolbarStateRef.current.isItalic
+        isUnderline = typeof isUnderline === 'boolean' ? isUnderline : toolbarStateRef.current.isUnderline
+        isCode = typeof isCode === 'boolean' ? isCode : toolbarStateRef.current.isCode
+        latexEquation = typeof latexEquation === 'string' ? latexEquation : toolbarStateRef.current.latexEquation
+        markerColor = typeof markerColor === 'string' ? markerColor : toolbarStateRef.current.markerColor
+        textColor = typeof textColor === 'string' ? textColor : toolbarStateRef.current.textColor
+        link = typeof link === 'string' ? link : toolbarStateRef.current.link
+
         toolbarStateRef.current = {
-            isBold: !toolbarStateRef.current.isBold
+            isBold, textSize, isItalic, isUnderline, isCode, latexEquation, markerColor, textColor, link
         }
-        inputElementRef.current.focus()
+        
+        if (typeof toolbarObserverRef.current === 'function') {
+            toolbarObserverRef.current(toolbarStateRef.current)
+        }
     }
 
     function retrieveContentCharacterIndexesByContentUUID() {
@@ -86,7 +108,7 @@ export default function RichTextBlockText(props) {
             const content = props.block.contents[contentIndex]
             const contentUUID = content.uuid
 
-            for (let contentTextIndex=0; contentTextIndex<content.text.length; contentTextIndex++) {
+            for (let contentTextIndex=0; contentTextIndex < content.text.length; contentTextIndex++) {
                 textCharacterIndexesByContentUUID.push(contentUUID)
             }
         }
@@ -157,86 +179,20 @@ export default function RichTextBlockText(props) {
     }
 
     /**
-     * / * WEB ONLY * /
-     * 
      * This is used to update the caretPositionRef so we can know where the caret is located
      * inside of the contentEditable container.
      */
-     function webOnUpdateCaretPosition(start, end, preventToUpdateCaretPositionOnSelectionChange=false) {
+     function onUpdateCaretPosition(start, end, preventToUpdateCaretPositionOnSelectionChange=false) {
         preventToUpdateCaretPositionOnSelectionChangeRef.current = preventToUpdateCaretPositionOnSelectionChange
-        if (isInCompositionRef.current === false) {
+        const isNOTInCompositionAndAWebAppOrIsMobileApp = (APP === 'web' && webIsInCompositionRef.current === false) || 
+            APP === 'mobile'
+        if (isNOTInCompositionAndAWebAppOrIsMobileApp) {
             previousCaretPositionRef.current = {
                 start: caretPositionRef.current.start,
                 end: caretPositionRef.current.end
             }
             caretPositionRef.current = { start, end }
         }
-    }
-
-    /**
-     * / * WEB ONLY * /
-     * 
-     * This is used to update the isElementFocusedRef so we can know if the element is focused or not.
-     * 
-     * @param {boolean} isElementFocused - The boolean value of if the element is focused or not.
-     */
-    function webOnUpdateElementFocused(isElementFocused=!isElementFocusedRef.current) {
-        isElementFocusedRef.current = isElementFocused
-    }
-    
-    /**
-     * / * WEB ONLY * /
-     * 
-     * This function is supposed to update the status if a composition is in progress or not.
-     * 
-     * @param {boolean} [isInComposition=!isInCompositionRef.current] - The status of the composition.
-     */
-    function webOnUpdateIsInCompositionStatus(isInComposition=!isInCompositionRef.current) {
-        preventToUpdateCaretPositionOnSelectionChangeRef.current = isInComposition === false
-        isInCompositionRef.current = isInComposition
-    }
-
-    /**
-     * / * WEB ONLY * /
-     * 
-     * This is used to retrieve the inner html contents of the contentEditable container. We prevent 
-     */
-    function webGetInnerHTML() {
-        let innerHTML = ``
-        if (APP === 'web') {
-            for (const content of blockRef.current.contents) {
-                const hasCustomMetadata = typeof content.customMetadata === 'object' &&
-                    ![null, undefined].includes(content.customMetadata) &&
-                    Object.keys(content.customMetadata).length > 0
-                const isBold = typeof content.isBold === 'boolean' && content.isBold === true
-                const isItalic = typeof content.isItalic === 'boolean' && content.isItalic === true
-                const isCode = typeof content.isCode === 'boolean' && content.isCode === true
-                const isUnderline = typeof content.isUnderline === 'boolean' && 
-                    content.isUnderline === true
-                const isLink = typeof content.link === 'string' && content.link !== ''
-                const hasMarkerColor = typeof content.markerColor === 'string' && 
-                    content.markerColor !== ''
-                const hasTextColor = typeof content.textColor === 'string' && 
-                    content.textColor !== ''
-                const hasSpecialSize = typeof content.textSize === 'number' && 
-                    content.textSize !== DEFAULT_TEXT_SIZE
-                const isNotASpecialContent = (hasCustomMetadata || hasMarkerColor ||
-                    isBold || isItalic || isCode || isUnderline || isLink || hasTextColor ||
-                    hasSpecialSize) === false
-                
-                if (isNotASpecialContent) {
-                    innerHTML = `${innerHTML}${content.text}`
-                } else {
-                    innerHTML = `${innerHTML}${renderToString(
-                        <RichTextBlockTextContent
-                        key={content.uuid}
-                        content={content}
-                        />
-                    )}`
-                }
-            }
-        }
-        return innerHTML
     }
 
     /**
@@ -262,8 +218,6 @@ export default function RichTextBlockText(props) {
         let indexOffset = 0
         const markedContentUUIDsToBeRemoved = [] 
         const contentUUIDsToRemoveTextFrom = [...new Set(textCharacterIndexesByContentUUIDRef.current.slice(startIndex, endIndex))]
-        console.log(textCharacterIndexesByContentUUIDRef)
-        console.log(contentUUIDsToRemoveTextFrom)
         for (const content of blockRef.current.contents) {
             const isContentAffectedByDeletion = contentUUIDsToRemoveTextFrom.includes(content.uuid)
 
@@ -282,7 +236,7 @@ export default function RichTextBlockText(props) {
                     markedContentUUIDsToBeRemoved.push(content.uuid)
                 }
             }
-            indexOffset =+ content.text.length
+            indexOffset += content.text.length
 
             const hasPassedThroughAllOfTheContentsWhereTheDeleteAffected = indexOffset >= endIndex
             if (hasPassedThroughAllOfTheContentsWhereTheDeleteAffected) break
@@ -307,20 +261,52 @@ export default function RichTextBlockText(props) {
         ]
     }
 
+    /**
+     * This is supposed to insert some text to the text contents. The idea is that we will
+     */
     function userInsertedSomeText(startIndex, text) {
         let indexOffset = 0
-        for (const content of blockRef.current.contents) {
+        for (let i=0; i<blockRef.current.contents.length; i++) {
+            const content = blockRef.current.contents[i]
             const isContentAffectedByInsertion = startIndex <= indexOffset + content.text.length &&
                 startIndex >= indexOffset
+
             if (isContentAffectedByInsertion) {
                 const startIndexToInsert = startIndex - indexOffset
-                content.text = content.text.substring(0, startIndexToInsert) + 
-                    text + content.text.substring(startIndexToInsert, content.text.length)
+                const hasTheContentParametersChanged = checkIfContentsHaveTheSameParameters(
+                    content, toolbarStateRef.current
+                ) === false
+                if (hasTheContentParametersChanged) {
+                    const contentTextToTheLeft = content.text.substring(0, startIndexToInsert)
+                    const contentTextToTheRight = content.text.substring(startIndexToInsert, content.text.length)
+                    const newContent = createNewContent({...toolbarStateRef.current, text: text})
+                    const isContentToTheLeftEmpty = contentTextToTheLeft.length === 0
+                    const isContentToTheRightEmpty = contentTextToTheRight.length === 0
+
+                    let newContentIndex = i
+                    if (isContentToTheLeftEmpty === false) {
+                        newContentIndex = i + 1
+                        const contentToTheLeft = createNewContent({...content, text: contentTextToTheLeft})
+                        blockRef.current.contents.splice(i, 1, contentToTheLeft)
+                        blockRef.current.contents.splice(newContentIndex, 0, newContent)
+                    } else {
+                        blockRef.current.contents.splice(newContentIndex, 1, newContent)
+                    }
+                    
+                    if (isContentToTheRightEmpty === false) {
+                        const contentToTheRight = createNewContent({...content, text: contentTextToTheRight})
+                        blockRef.current.contents.splice(newContentIndex + 1, 0, contentToTheRight)
+                    }
+                } else {
+                    content.text = content.text.substring(0, startIndexToInsert) + 
+                        text + content.text.substring(startIndexToInsert, content.text.length)
+                }
                 // We always modify just one content no matter the size of the text inserted.
                 break
             }
-            indexOffset =+ content.text.length
+            indexOffset += content.text.length
         }
+
     }
 
     /**
@@ -346,7 +332,6 @@ export default function RichTextBlockText(props) {
                 textCharacterIndexesByContentUUID.push(contentUUID)
             }
         }
-
         if (hasSufficientContentsToBeMerged) {
             const newContents = []
             let currentContent = blockRef.current.contents[0]
@@ -374,13 +359,17 @@ export default function RichTextBlockText(props) {
                     newContents.push(newContent)
                     currentContent = newContent
                 } else {
-                    textCharacterIndexesByContentUUID.push(currentContent.uuid)
+                    pushContentUUIDToTextCharacterIndexesByContentUUID(
+                        currentContent.uuid, currentContent.text
+                    )
                     currentContent.order = newContents.length
                     newContents.push(currentContent)
 
                     const isComparingLastContent = i === blockRef.current.contents.length - 1
                     if (isComparingLastContent) {
-                        textCharacterIndexesByContentUUID.push(nextContent.uuid)
+                        pushContentUUIDToTextCharacterIndexesByContentUUID(
+                            nextContent.uuid, nextContent.text
+                        )
                         nextContent.order = newContents.length
                         newContents.push(nextContent)
                     }
@@ -395,66 +384,22 @@ export default function RichTextBlockText(props) {
         }
     }
 
-    function webUpdateDivWithoutUpdatingState() {
-        preventToUpdateCaretPositionOnSelectionChangeRef.current = true
-        const { start, end } = caretPositionRef.current
-        inputElementRef.current.innerHTML = webGetInnerHTML()
-        webSetCaretPosition(start, end)
-        preventToUpdateCaretPositionOnSelectionChangeRef.current = false
-    }
-
     /**
-     * References: https://developer.mozilla.org/en-US/docs/Web/API/Node/nodeType
+     * This will handle whenever some text is inserted into the contenteditable container. By default the 
+     * content editable does not have onChange event, so we need to handle that using the onInput event callback.
      * 
-     * @param {*} start 
-     * @param {*} end 
+     * @param {string} insertedText - The hole text inside of the contenteditable container. We will use the caret positions
+     * to know where the text was inserted.
      */
-    function webSetCaretPosition(start, end) {
-        let indexOffset = 0
-        const selection = window.getSelection()
-        const range = document.createRange()
-
-        for (let node of inputElementRef.current.childNodes) {
-            let text = ''
-            const isNodeOfTypeText = node.nodeType === Node.TEXT_NODE
-            const isNodeOfTypeElement = node.nodeType === Node.ELEMENT_NODE
-            if (isNodeOfTypeText) {
-                text = node.data
-            } else if (isNodeOfTypeElement) {
-                node = node.firstChild
-                const isFirstChildNodeOfTypeText = node.nodeType === Node.TEXT_NODE
-                if (isFirstChildNodeOfTypeText) {
-                    text = node.data
-                }
-            }
-            
-            const startingIndexOfContent = indexOffset + 1
-            const isNodeTheStartingPositionOfTheSelection = start <= indexOffset + text.length &&
-                start >= startingIndexOfContent
-            const isNodeTheEndingPositionOfTheSelection = end <= indexOffset + text.length && 
-                end >= startingIndexOfContent
-            if (isNodeTheStartingPositionOfTheSelection) {
-                range.setStart(node, start - indexOffset)
-            }
-            if (isNodeTheEndingPositionOfTheSelection) {
-                range.setStart(node, end - indexOffset)
-            }
-            indexOffset += text.length
-        }
-
-        selection.removeAllRanges()
-        selection.addRange(range)
-    }
-
-    function webOnInput(insertedText) {
-        const isNotInsideComposition = isInCompositionRef.current === false
-        if (isNotInsideComposition) {
+    function onInput(insertedText) {
+        const isNotInsideComposition = webIsInCompositionRef.current === false
+        const isWebAppAndNotInisdeCompositionOrIsMobile = (APP === 'web' && isNotInsideComposition) || APP === 'mobile'
+        if (isWebAppAndNotInisdeCompositionOrIsMobile) {
             const { end: endIndexPositionChanged } = caretPositionRef.current
             const { start: startIndexPositionChanged } = previousCaretPositionRef.current
     
             const didUserDeleteAnyTextFromSelection = previousCaretPositionRef.current.start !== previousCaretPositionRef.current.end
             const didUserJustDeleteTheText = insertedText.length < fullTextRef.current.length
-            
             if (didUserDeleteAnyTextFromSelection) {
                 userDeletedSomeText(previousCaretPositionRef.current.start, previousCaretPositionRef.current.end)
             } else if (didUserJustDeleteTheText) {
@@ -479,49 +424,23 @@ export default function RichTextBlockText(props) {
             }
 
             updateFullText(insertedText)
+            tryToMergeEqualContents()     
         }
-        webUpdateDivWithoutUpdatingState()
-        tryToMergeEqualContents()        
         preventToUpdateCaretPositionOnSelectionChangeRef.current = false
-        
     }
 
-    /**
-     * / * WEB ONLY * /
-     * 
-     * Why use this instead of the default `onSelect` event? Because `onSelect` is not triggered when
-     * we select the hole text but the mouseup is fired outside of the contentEditable container.
-     * Because of that using the `selectionchange` event is the best way to make the selection work.
-     * 
-     * Reference: https://developer.mozilla.org/en-US/docs/Web/API/Document/selectionchange_event
-     */
-    function webOnSelectionChange() {
-        const selectionData = document.getSelection()
-        const isSelectedElementThisElement = inputElementRef.current.contains(selectionData.anchorNode)
-        const canUpdatePosition = isSelectedElementThisElement && 
-            preventToUpdateCaretPositionOnSelectionChangeRef.current === false
-
-        if (canUpdatePosition) {
-            const { start, end } = webGetSelectionSelectCursorPosition(inputElementRef.current)
-            webOnUpdateCaretPosition(start, end)
-        }
-    }
-
-    useEffect(() => {
-        if (APP === 'web') document.addEventListener('selectionchange', webOnSelectionChange)
-        return () => {
-            if (APP === 'web') document.removeEventListener('selectionchange', webOnSelectionChange)
-        }
-    }, [])
     return (
         <Layout
         inputElementRef={inputElementRef}
-        updateToolbarState={updateToolbarState}
-        webOnInput={webOnInput}
-        webOnUpdateCaretPosition={webOnUpdateCaretPosition}
-        webOnUpdateElementFocused={webOnUpdateElementFocused}
-        webOnUpdateIsInCompositionStatus={webOnUpdateIsInCompositionStatus}
-        webGetInnerHTML={webGetInnerHTML}
+        toolbarStateRef={toolbarStateRef}
+        blockRef={blockRef}
+        preventToUpdateCaretPositionOnSelectionChangeRef={preventToUpdateCaretPositionOnSelectionChangeRef}
+        webIsInCompositionRef={webIsInCompositionRef}
+        caretPositionRef={caretPositionRef}
+        registerToolbarStateObserver={registerToolbarStateObserver}
+        onUpdateToolbarState={onUpdateToolbarState}
+        onUpdateCaretPosition={onUpdateCaretPosition}
+        onInput={onInput}
         />
     )
 }
