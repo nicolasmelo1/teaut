@@ -12,7 +12,7 @@ export default function RichTextBlockTextContentWebLayout(props) {
         markerColor={props.content.markerColor}
         textSize={props.content.textSize}
         >
-            {`${props.content.text}`}
+            {`${props.isLastContentAndLastCharacterIsANewLine ? props.content.text + '\n' : props.content.text}`}
         </Styled.Span>
     )
 }

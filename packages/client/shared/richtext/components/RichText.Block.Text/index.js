@@ -23,9 +23,9 @@ export default function RichTextBlockText(props) {
     const blockRef = useRef(props.block)
     const caretPositionRef = useRef({ start: 0, end: 0 })
     const previousCaretPositionRef = useRef(caretPositionRef.current)
-    const webIsInCompositionRef = useRef(false)
     const preventToUpdateCaretPositionOnSelectionChangeRef = useRef(false)
     const textCharacterIndexesByContentUUIDRef = useRef(retrieveContentCharacterIndexesByContentUUID())
+    const isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef = useRef(false)
 
     /**
      * This is a factory function used for creating new contents, if you look at the parameters
@@ -140,6 +140,13 @@ export default function RichTextBlockText(props) {
         return fullText
     }
 
+    function updateToPreventToolbarStateChangeWhenTyping(
+        isTyping=!isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current
+    ) {
+        isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current = isTyping
+        if (isTyping === false) updateToolbarStateBasedOnCaretPosition()
+    }
+
     /**
      * This function is supposed to be used to check if two contents have the same parameters.
      * We can use this comparison for two things:
@@ -179,20 +186,103 @@ export default function RichTextBlockText(props) {
     }
 
     /**
+     * When the user selects a text inside of the text input or when he moves the caret using the arrow keys the
+     * state of the toolbar should be updated based on this position of the caret.
+     * 
+     * So how does it work? It's simple, let's separate first with two use cases: A new selection and just the caret moving.
+     * - Just the caret moving:
+     *      -> We will get the content where the caret is placed at and update the toolbar state based on that single content.
+     * - A new selection:
+     *      -> We will get all of the contents that are inside of the selection then we merge the params together. For 
+     * boolean values (eg.: isBold, isItalic), it's simple. If we have the following markdown text 'I **love** *coding*',
+     * I is not bold nor italic
+     * love is bold
+     * and coding is not bold but is italic
+     * 
+     * If we select "odin" from "coding" we are selecting just the content of 'coding' word. This means that italic will be highlighed
+     * in the toolbar, but not bold. So now suppose we select "ve co" from "love" and "coding", we are selecting the 
+     * bold content and the italic content, but 'love' is not italic, nor 'coding' is bold. So both italic and bold WILL NOT
+     * be highlighted in the toolbar.
+     * 
+     * So what if coding was bold? Then the bold would be highlighted in the toolbar but not the italic.
+     * 
+     * Notice that we have the `isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current === false` condition
+     * on the first line of the function, the name of the variable speaks for itself, but the idea is, that, while typing
+     * the `onUpdateCaretPosition` function will be called, so we need to prevent updating the toolbar while typing so everything
+     * can function normally and well.
+     */
+    function updateToolbarStateBasedOnCaretPosition() {
+        if (isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current === false) {
+            let indexOffset = 0
+
+            let isBold = false
+            let textSize = DEFAULT_TEXT_SIZE
+            let isItalic = false 
+            let isUnderline = false 
+            let isCode = false
+            let latexEquation = null 
+            let markerColor = null 
+            let textColor = null 
+            let link = null
+
+            const { start, end } = caretPositionRef.current
+
+            for (const content of blockRef.current.contents) {
+                const isContentInStartPosition = (start <= indexOffset + content.text.length &&
+                    start >= indexOffset)
+                const isContentAfterStartPosition = start <= indexOffset
+                const isContentInOrAfterStartPosition = isContentInStartPosition || isContentAfterStartPosition
+
+                if (isContentInOrAfterStartPosition) {
+                    if (isContentInStartPosition) {
+                        isBold = content.isBold
+                        textSize = content.textSize
+                        isItalic = content.isItalic
+                        isUnderline = content.isUnderline
+                        isCode = content.isCode
+                        latexEquation = content.latexEquation
+                        markerColor = content.markerColor
+                        textColor = content.textColor
+                        link = content.link
+                    } else {
+                        isBold = content.isBold && isBold
+                        textSize = content.textSize === textSize ? textSize : content.textSize
+                        isItalic = content.isItalic && isItalic
+                        isUnderline = content.isUnderline && isUnderline
+                        isCode = content.isCode && isCode
+                        latexEquation = content.latexEquation === latexEquation ? latexEquation : content.latexEquation
+                        markerColor = content.markerColor === markerColor ? markerColor : content.markerColor
+                        textColor = content.textColor === textColor ? textColor : content.textColor
+                        link = content.link === link ? link : content.link
+                    }
+
+                    const isContentInEndPosition = (end <= indexOffset + content.text.length &&
+                        end >= indexOffset)
+                    if (isContentInEndPosition) {
+                        onUpdateToolbarState({
+                            isBold, isCode, isItalic, isUnderline, textColor, textSize, 
+                            latexEquation, markerColor, link
+                        })
+                        break
+                    }
+                }
+                indexOffset += content.text.length
+            }
+        }
+    }
+
+    /**
      * This is used to update the caretPositionRef so we can know where the caret is located
      * inside of the contentEditable container.
      */
      function onUpdateCaretPosition(start, end, preventToUpdateCaretPositionOnSelectionChange=false) {
         preventToUpdateCaretPositionOnSelectionChangeRef.current = preventToUpdateCaretPositionOnSelectionChange
-        const isNOTInCompositionAndAWebAppOrIsMobileApp = (APP === 'web' && webIsInCompositionRef.current === false) || 
-            APP === 'mobile'
-        if (isNOTInCompositionAndAWebAppOrIsMobileApp) {
-            previousCaretPositionRef.current = {
-                start: caretPositionRef.current.start,
-                end: caretPositionRef.current.end
-            }
-            caretPositionRef.current = { start, end }
+        previousCaretPositionRef.current = {
+            start: caretPositionRef.current.start,
+            end: caretPositionRef.current.end
         }
+        caretPositionRef.current = { start, end }
+        updateToolbarStateBasedOnCaretPosition()
     }
 
     /**
@@ -262,7 +352,21 @@ export default function RichTextBlockText(props) {
     }
 
     /**
-     * This is supposed to insert some text to the text contents. The idea is that we will
+     * This is supposed to insert some text to the text contents. The idea is that we will loop 
+     * trough all of the contents until we reach the content that the user started typing on.
+     * 
+     * There are two conditions here:
+     * - The user modified the toolbarParams (so the new text is now bold, while the content was not):
+     *    '-> When this happens we should create a new content and insert the new text to it while separating the
+     *        original content in a left and right side.
+     * - The user did not modify the toolbarParams:
+     *    '-> We should just insert the new text to the original content in the start position of the selection.
+     * 
+     * IMPORTANT: It's important to understand that we just modify ONE, and ONLY ONE content. We cannot
+     * modify a bold and a normal text all at once when the user is typing
+     * 
+     * @param {number} startIndex - The index of the start of the selection.
+     * @param {string} text - The text that was inserted inside of the text editor.
      */
     function userInsertedSomeText(startIndex, text) {
         let indexOffset = 0
@@ -270,7 +374,7 @@ export default function RichTextBlockText(props) {
             const content = blockRef.current.contents[i]
             const isContentAffectedByInsertion = startIndex <= indexOffset + content.text.length &&
                 startIndex >= indexOffset
-
+        
             if (isContentAffectedByInsertion) {
                 const startIndexToInsert = startIndex - indexOffset
                 const hasTheContentParametersChanged = checkIfContentsHaveTheSameParameters(
@@ -392,41 +496,37 @@ export default function RichTextBlockText(props) {
      * to know where the text was inserted.
      */
     function onInput(insertedText) {
-        const isNotInsideComposition = webIsInCompositionRef.current === false
-        const isWebAppAndNotInisdeCompositionOrIsMobile = (APP === 'web' && isNotInsideComposition) || APP === 'mobile'
-        if (isWebAppAndNotInisdeCompositionOrIsMobile) {
-            const { end: endIndexPositionChanged } = caretPositionRef.current
-            const { start: startIndexPositionChanged } = previousCaretPositionRef.current
-    
-            const didUserDeleteAnyTextFromSelection = previousCaretPositionRef.current.start !== previousCaretPositionRef.current.end
-            const didUserJustDeleteTheText = insertedText.length < fullTextRef.current.length
-            if (didUserDeleteAnyTextFromSelection) {
-                userDeletedSomeText(previousCaretPositionRef.current.start, previousCaretPositionRef.current.end)
-            } else if (didUserJustDeleteTheText) {
-                userDeletedSomeText(caretPositionRef.current.start, previousCaretPositionRef.current.end)
-            }
+        const { end: endIndexPositionChanged } = caretPositionRef.current
+        const { start: startIndexPositionChanged } = previousCaretPositionRef.current
 
-            // We know that the user has inserted some text on two conditions: 
-            // - He selected the text and then inserted some text
-            //      '-> On This case the start index of the previousCaretPosition should
-            //          be different than the start index of the caretPosition
-            // - He inserted some text without selecting anything from the text.
-            //      '-> We know that the user has inserted some text when the current
-            //          start inted caret position is bigger than the previous caret 
-            //          position start index
-            const didUserInsertAnyText = (didUserDeleteAnyTextFromSelection && 
-                previousCaretPositionRef.current.start !== caretPositionRef.current.start) || 
-                (caretPositionRef.current.start > previousCaretPositionRef.current.start)
-            
-            if (didUserInsertAnyText) {
-                const insertedCharacter = insertedText.substring(startIndexPositionChanged, endIndexPositionChanged)
-                userInsertedSomeText(startIndexPositionChanged, insertedCharacter)
-            }
+        const didUserDeleteAnyTextFromSelection = previousCaretPositionRef.current.start !== previousCaretPositionRef.current.end
+        const didUserJustDeleteTheText = insertedText.length < fullTextRef.current.length
 
-            updateFullText(insertedText)
-            tryToMergeEqualContents()     
+        if (didUserDeleteAnyTextFromSelection) {
+            userDeletedSomeText(previousCaretPositionRef.current.start, previousCaretPositionRef.current.end)
+        } else if (didUserJustDeleteTheText) {
+            userDeletedSomeText(caretPositionRef.current.start, previousCaretPositionRef.current.end)
         }
-        preventToUpdateCaretPositionOnSelectionChangeRef.current = false
+
+        // We know that the user has inserted some text on two conditions: 
+        // - He selected the text and then inserted some text
+        //      '-> On This case the start index of the previousCaretPosition should
+        //          be different than the start index of the caretPosition
+        // - He inserted some text without selecting anything from the text.
+        //      '-> We know that the user has inserted some text when the current
+        //          start inted caret position is bigger than the previous caret 
+        //          position start index
+        const didUserInsertAnyText = (didUserDeleteAnyTextFromSelection && 
+            previousCaretPositionRef.current.start !== caretPositionRef.current.start) || 
+            (caretPositionRef.current.start > previousCaretPositionRef.current.start)
+
+        if (didUserInsertAnyText) {
+            const insertedCharacter = insertedText.substring(startIndexPositionChanged, endIndexPositionChanged)
+            userInsertedSomeText(startIndexPositionChanged, insertedCharacter)
+        }
+
+        updateFullText(insertedText)
+        tryToMergeEqualContents()     
     }
 
     return (
@@ -435,9 +535,9 @@ export default function RichTextBlockText(props) {
         toolbarStateRef={toolbarStateRef}
         blockRef={blockRef}
         preventToUpdateCaretPositionOnSelectionChangeRef={preventToUpdateCaretPositionOnSelectionChangeRef}
-        webIsInCompositionRef={webIsInCompositionRef}
         caretPositionRef={caretPositionRef}
         registerToolbarStateObserver={registerToolbarStateObserver}
+        updateToPreventToolbarStateChangeWhenTyping={updateToPreventToolbarStateChangeWhenTyping}
         onUpdateToolbarState={onUpdateToolbarState}
         onUpdateCaretPosition={onUpdateCaretPosition}
         onInput={onInput}

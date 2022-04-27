@@ -22,6 +22,7 @@ const isUnderline = (props) => props.isUnderline ? `1px solid ${getTextColor(pro
 
 export const Span = APP === 'web' ?
 styled.span`
+    white-space: pre-wrap;
     font-weight: ${props=> isBold(props)};
     font-style: ${props => isItalic(props)};
     border-bottom: ${props => isUnderline(props)};

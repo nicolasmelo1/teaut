@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect } from 'react'
+import { Fragment, useState, useEffect, useRef } from 'react'
 import { renderToString } from 'react-dom/server'
 import { APP } from '../../../../conf'
 import { webGetSelectionSelectCursorPosition } from '../utils'
@@ -32,36 +32,19 @@ function RichTextBlockTextToolbarWebLayout(props) {
  * Since this component has too many web specific logic we can add the web specific logic inside of the layout itself.
  */
 export default function RichTextBlockTextWebLayout(props) {
+    const hasUserInsertedATextAfterCompositionRef = useRef(true)
+    const isInCompositionRef = useRef(false)
+
     /** 
      * This function is supposed to update the status if a composition is in progress or not.
      * 
-     * @param {boolean} [isInComposition=!webIsInCompositionRef.current] - The status of the composition.
+     * @param {boolean} [isInComposition=!isInCompositionRef.current] - The status of the composition.
      */
-     function onUpdateIsInCompositionStatus(isInComposition=!webIsInCompositionRef.current) {
+     function onUpdateIsInCompositionStatus(isInComposition=!isInCompositionRef.current) {
         props.preventToUpdateCaretPositionOnSelectionChangeRef.current = isInComposition === false
-        props.webIsInCompositionRef.current = isInComposition
+        isInCompositionRef.current = isInComposition
     }
 
-    /**
-     * Why use this instead of the default `onSelect` event? Because `onSelect` is not triggered when
-     * we select the hole text but the mouseup is fired outside of the contentEditable container.
-     * Because of that using the `selectionchange` event is the best way to make the selection work.
-     * 
-     * Reference: https://developer.mozilla.org/en-US/docs/Web/API/Document/selectionchange_event
-     */
-     function onSelectionChange() {
-        const selectionData = document.getSelection()
-        const isSelectedElementThisElement = props.inputElementRef.current.contains(selectionData.anchorNode)
-        const canUpdatePosition = isSelectedElementThisElement && 
-            props.preventToUpdateCaretPositionOnSelectionChangeRef.current === false &&
-            props.webIsInCompositionRef.current === false
-        const { start, end } = webGetSelectionSelectCursorPosition(props.inputElementRef.current)
-        
-        if (canUpdatePosition) {
-            props.onUpdateCaretPosition(start, end)
-        }
-    }
-    
     /**
      * This is used so we can update the contents of the block at EVERY type of the user. This way it makes
      * it A LOT easier for us to handle when the user selects to make the text bold, italic, underlined and
@@ -131,12 +114,69 @@ export default function RichTextBlockTextWebLayout(props) {
     }
 
     /**
+     * This is the function that is called when the composition ends. The composition
+     * usually is something from mac users.
+     * 
+     * The idea is that when the user types ˜ (tilde) we want to insert a tilde in the text that comes after it
+     * so typing ˜ in the text input will underline this tilde, this means that if i type `a` for example
+     * the ˜ will be merged with the 'a' and then the string will be ã.
+     * 
+     * So for example if i'm typing 'não' the process is:
+     * 1 - Type 'n'. The string here will be 'n'
+     * 2 - Type alt + n in the keyboard, this will start the composition. The string will be 'n˜'
+     * 3 - Type 'a'. The string here will be 'nã'
+     * 4 - Type 'o'. The string here will be 'não'
+     * 
+     * Do you see that in process 3 and 2 the characters are merged so they are in the same position on the string?
+     * That's the hole idea.
+     * 
+     * `onCompositionEnd` will be called on process number 3.
+     * 
+     * But what if we do 'n˜' and do not type 'a'? Then 'onCompositionEnd' will be called on process number 2 and we will
+     * insert the '˜' in the text. That's what 'hasUserInsertedATextAfterCompositionRef' is for.
+     */
+    function onCompositionEnd() {
+        onUpdateIsInCompositionStatus(false)
+        if (hasUserInsertedATextAfterCompositionRef.current === false) {
+            const { start, end } = webGetSelectionSelectCursorPosition(props.inputElementRef.current)
+            props.onUpdateCaretPosition(start, end, true)
+            props.onInput(props.inputElementRef.current.textContent)
+            updateDivWithoutUpdatingState()
+
+            hasUserInsertedATextAfterCompositionRef.current = true
+        }
+    }
+    /**
+     * @param {import('react').SyntheticEvent<InputEvent>} e - The event that is triggered when the user types something.
+     */
+    function onInput(e) {
+        const didTheUserHitDeleteOrBackspace = e.nativeEvent.inputType.includes('delete')
+        if (didTheUserHitDeleteOrBackspace) {
+            const { start, end } = webGetSelectionSelectCursorPosition(e.target)
+            if (isInCompositionRef.current === false) {
+                props.onUpdateCaretPosition(start, end, true)
+            }
+        }
+        setTimeout(() => {
+            const isNotInComposition = isInCompositionRef.current === false
+            if (isNotInComposition) {
+                hasUserInsertedATextAfterCompositionRef.current = true
+                props.onInput(e.target.textContent)
+                updateDivWithoutUpdatingState()
+            } else {
+                hasUserInsertedATextAfterCompositionRef.current = false
+            }
+        }, 0)
+    }
+    /**
      * This is used to retrieve the inner html contents of the contentEditable container. We prevent 
      */
      function getInnerHTML() {
         let innerHTML = ``
         if (APP === 'web') {
-            for (const content of props.blockRef.current.contents) {
+            for (let i=0; i<props.blockRef.current.contents.length; i++) {
+                const content = props.blockRef.current.contents[i]
+
                 const hasCustomMetadata = typeof content.customMetadata === 'object' &&
                     ![null, undefined].includes(content.customMetadata) &&
                     Object.keys(content.customMetadata).length > 0
@@ -156,19 +196,45 @@ export default function RichTextBlockTextWebLayout(props) {
                     isBold || isItalic || isCode || isUnderline || isLink || hasTextColor ||
                     hasSpecialSize) === false
                 
+                const isLastContent = i === props.blockRef.current.contents.length - 1
+                const isLastContentAndLastCharacterIsANewLine = isLastContent && content.text.endsWith('\n')
                 if (isNotASpecialContent) {
-                    innerHTML = `${innerHTML}${content.text}`
+                    innerHTML = `${innerHTML}${isLastContentAndLastCharacterIsANewLine ? content.text + '\n' : content.text}`
                 } else {
                     innerHTML = `${innerHTML}${renderToString(
                         <RichTextBlockTextContent
                         key={content.uuid}
+                        isLastContentAndLastCharacterIsANewLine={isLastContentAndLastCharacterIsANewLine}
                         content={content}
                         />
                     )}`
                 }
             }
         }
+        console.log(innerHTML)
         return innerHTML
+    }
+
+     /**
+     * Why use this instead of the default `onSelect` event? Because `onSelect` is not triggered when
+     * we select the hole text but the mouseup is fired outside of the contentEditable container.
+     * Because of that using the `selectionchange` event is the best way to update the caret position
+     * when the user selects something inside of the text.
+     * 
+     * Reference: https://developer.mozilla.org/en-US/docs/Web/API/Document/selectionchange_event
+     */
+    function onSelectionChange() {
+        const selectionData = document.getSelection()
+        const isSelectedElementThisElement = props.inputElementRef.current.contains(selectionData.anchorNode)
+        const canUpdatePosition = isSelectedElementThisElement && 
+            props.preventToUpdateCaretPositionOnSelectionChangeRef.current === false &&
+            isInCompositionRef.current === false
+        const { start, end } = webGetSelectionSelectCursorPosition(props.inputElementRef.current)
+        
+        if (canUpdatePosition) {
+            props.onUpdateCaretPosition(start, end)
+        }
+        props.preventToUpdateCaretPositionOnSelectionChangeRef.current = false
     }
 
     useEffect(() => {
@@ -187,17 +253,10 @@ export default function RichTextBlockTextWebLayout(props) {
             suppressContentEditableWarning={true}
             contentEditable={true}
             onCompositionStart={() => onUpdateIsInCompositionStatus(true)}
-            onCompositionEnd={() => onUpdateIsInCompositionStatus(false)}
-            onInput={(e) => {
-                if (e.nativeEvent.inputType.includes('delete')) {
-                    const { start, end } = webGetSelectionSelectCursorPosition(e.target)
-                    props.onUpdateCaretPosition(start, end, true)
-                }
-                setTimeout(() => {
-                    props.onInput(e.target.textContent)
-                    updateDivWithoutUpdatingState()
-                }, 0)
-            }}
+            onCompositionEnd={(e) => onCompositionEnd(e)}
+            onKeyDown={() => props.updateToPreventToolbarStateChangeWhenTyping(true)}
+            onKeyUp={() => props.updateToPreventToolbarStateChangeWhenTyping(false)}
+            onInput={(e) => onInput(e)}
             dangerouslySetInnerHTML={{
                 __html: getInnerHTML()
             }}
