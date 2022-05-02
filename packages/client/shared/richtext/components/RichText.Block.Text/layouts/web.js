@@ -34,7 +34,9 @@ function RichTextBlockTextToolbarWebLayout(props) {
 export default function RichTextBlockTextWebLayout(props) {
     const hasUserInsertedATextAfterCompositionRef = useRef(true)
     const isInCompositionRef = useRef(false)
-
+    const isUserPressingEnterRef = useRef(false)
+    const isToPreventSelectionBeingCalledBecauseRerenderingRef = useRef(false)
+    
     /** 
      * This function is supposed to update the status if a composition is in progress or not.
      * 
@@ -55,12 +57,12 @@ export default function RichTextBlockTextWebLayout(props) {
      * the caret will move back to the first character of the block. So this will mess up with our caret positions.
      * In order to prevent that we prevent activating the `webOnUpdateCaretPosition`
      */
-     function updateDivWithoutUpdatingState() {
-        props.preventToUpdateCaretPositionOnSelectionChangeRef.current = true
+    function updateDivWithoutUpdatingState() {
+        isToPreventSelectionBeingCalledBecauseRerenderingRef.current = true
         const { start, end } = props.caretPositionRef.current
         props.inputElementRef.current.innerHTML = getInnerHTML()
         setCaretPosition(start, end)
-        props.preventToUpdateCaretPositionOnSelectionChangeRef.current = false
+        isToPreventSelectionBeingCalledBecauseRerenderingRef.current = false
     }
 
     /**
@@ -147,26 +149,45 @@ export default function RichTextBlockTextWebLayout(props) {
         }
     }
     /**
+     * We try to do the leas    
+     * Reference for all of the inputTypes: https://rawgit.com/w3c/input-events/v1/index.html#interface-InputEvent-Attributes
+     * 
      * @param {import('react').SyntheticEvent<InputEvent>} e - The event that is triggered when the user types something.
      */
     function onInput(e) {
+        const didSimplyHitEnter = e.nativeEvent.inputType === 'insertParagraph' && isUserPressingEnterRef.current === true
+        const didHitEnterWithShift = e.nativeEvent.inputType === 'insertLineBreak'
         const didTheUserHitDeleteOrBackspace = e.nativeEvent.inputType.includes('delete')
-        if (didTheUserHitDeleteOrBackspace) {
+        const hasUserInsertedSomeText = ![null, undefined, ''].includes(e.nativeEvent.data) && 
+            didTheUserHitDeleteOrBackspace === false
+
+        if (isInCompositionRef.current === false) {
             const { start, end } = webGetSelectionSelectCursorPosition(e.target)
-            if (isInCompositionRef.current === false) {
-                props.onUpdateCaretPosition(start, end, true)
-            }
+            props.onUpdateCaretPosition(start, end)
         }
-        setTimeout(() => {
+        
+        const insertedText = didHitEnterWithShift ? '\n' : hasUserInsertedSomeText ? e.nativeEvent.data : null
+        if (didSimplyHitEnter === false) {
             const isNotInComposition = isInCompositionRef.current === false
             if (isNotInComposition) {
                 hasUserInsertedATextAfterCompositionRef.current = true
-                props.onInput(e.target.textContent)
-                updateDivWithoutUpdatingState()
+                props.onInput(e.target.textContent, insertedText)
+                
+                if (
+                    didHitEnterWithShift === false && 
+                    didTheUserHitDeleteOrBackspace === false
+                ) {
+                    updateDivWithoutUpdatingState()
+                }
             } else {
                 hasUserInsertedATextAfterCompositionRef.current = false
             }
-        }, 0)
+        } else {
+            e.preventDefault()
+            updateDivWithoutUpdatingState()
+        }
+
+        if (isInCompositionRef.current === true) isInCompositionRef.current = false
     }
     /**
      * This is used to retrieve the inner html contents of the contentEditable container. We prevent 
@@ -198,8 +219,12 @@ export default function RichTextBlockTextWebLayout(props) {
                 
                 const isLastContent = i === props.blockRef.current.contents.length - 1
                 const isLastContentAndLastCharacterIsANewLine = isLastContent && content.text.endsWith('\n')
+                const isJustOneNewLine = (content.text.match(/\n$/g) || []).length === 1
                 if (isNotASpecialContent) {
-                    innerHTML = `${innerHTML}${isLastContentAndLastCharacterIsANewLine ? content.text + '\n' : content.text}`
+                    innerHTML = `${innerHTML}${isLastContentAndLastCharacterIsANewLine && isJustOneNewLine ? 
+                        content.text + '\n' : 
+                        content.text
+                    }`
                 } else {
                     innerHTML = `${innerHTML}${renderToString(
                         <RichTextBlockTextContent
@@ -211,7 +236,6 @@ export default function RichTextBlockTextWebLayout(props) {
                 }
             }
         }
-        console.log(innerHTML)
         return innerHTML
     }
 
@@ -228,13 +252,13 @@ export default function RichTextBlockTextWebLayout(props) {
         const isSelectedElementThisElement = props.inputElementRef.current.contains(selectionData.anchorNode)
         const canUpdatePosition = isSelectedElementThisElement && 
             props.preventToUpdateCaretPositionOnSelectionChangeRef.current === false &&
+            isToPreventSelectionBeingCalledBecauseRerenderingRef.current === false &&
             isInCompositionRef.current === false
         const { start, end } = webGetSelectionSelectCursorPosition(props.inputElementRef.current)
-        
         if (canUpdatePosition) {
             props.onUpdateCaretPosition(start, end)
         }
-        props.preventToUpdateCaretPositionOnSelectionChangeRef.current = false
+       props.preventToUpdateCaretPositionOnSelectionChangeRef.current = false
     }
 
     useEffect(() => {
@@ -252,10 +276,17 @@ export default function RichTextBlockTextWebLayout(props) {
             draggable={false}
             suppressContentEditableWarning={true}
             contentEditable={true}
+            onClick={() => onSelectionChange()}
             onCompositionStart={() => onUpdateIsInCompositionStatus(true)}
             onCompositionEnd={(e) => onCompositionEnd(e)}
-            onKeyDown={() => props.updateToPreventToolbarStateChangeWhenTyping(true)}
-            onKeyUp={() => props.updateToPreventToolbarStateChangeWhenTyping(false)}
+            onKeyDown={(e) => {
+                isUserPressingEnterRef.current = e.key === 'Enter'
+                props.updateToPreventToolbarStateChangeWhenTyping(true)
+            }}
+            onKeyUp={(e) => {
+                isUserPressingEnterRef.current = false
+                props.updateToPreventToolbarStateChangeWhenTyping(false)
+            }}
             onInput={(e) => onInput(e)}
             dangerouslySetInnerHTML={{
                 __html: getInnerHTML()

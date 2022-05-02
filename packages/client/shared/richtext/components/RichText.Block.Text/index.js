@@ -74,15 +74,36 @@ export default function RichTextBlockText(props) {
             link
         }
     }
-
+    
+    /**
+     * This is used to register the toolbarObserver, toolbarObserser is a function that will 
+     * recieve the state of the toolbar. Since this is a stateless component, in order to display
+     * the changes in the state inside the toolbar we need to change the state inside of the toolbar
+     * component.
+     * 
+     * @param {(toolbarState: {
+     *      isBold: boolean,
+     *      textSize: number, 
+     *      isItalic: boolean, 
+     *      isUnderline: boolean, 
+     *      isCode: boolean, 
+     *      latexEquation: null | string, 
+     *      markerColor: null | string, 
+     *      textColor: null | string, 
+     *      link: null | string
+     * })=> void} toolbarObserver - The function that will be called when the toolbar state changes.
+     */
     function registerToolbarStateObserver(toolbarObserver=()=>{}) {
         toolbarObserverRef.current = toolbarObserver
     }
+
     // TODO: TEMPORARY
     function onUpdateToolbarState({
         isBold=undefined, textSize=undefined, isItalic=undefined, isUnderline=undefined, isCode=undefined,
         latexEquation=undefined, markerColor=undefined, textColor=undefined, link=undefined
     }={}) {
+        inputElementRef.current.focus()
+
         isBold = typeof isBold === 'boolean' ? isBold : toolbarStateRef.current.isBold
         textSize = typeof textSize === 'number' ? textSize : toolbarStateRef.current.textSize
         isItalic = typeof isItalic === 'boolean' ? isItalic : toolbarStateRef.current.isItalic
@@ -97,10 +118,50 @@ export default function RichTextBlockText(props) {
             isBold, textSize, isItalic, isUnderline, isCode, latexEquation, markerColor, textColor, link
         }
         
-        if (typeof toolbarObserverRef.current === 'function') {
+        const isToolbarObserverDefined = typeof toolbarObserverRef.current === 'function'
+        if (isToolbarObserverDefined) {
             toolbarObserverRef.current(toolbarStateRef.current)
         }
+        
+        const hasUserSelectedAtLeastOneCharacter = caretPositionRef.current.start !== caretPositionRef.current.end
+        if (hasUserSelectedAtLeastOneCharacter) {
+            updateContentsAfterSelectingTextAndUpdatingToolbarState()
+        }
     }
+
+    /**
+     * This is used to update the contents when the user selects the 
+     */
+    function updateContentsAfterSelectingTextAndUpdatingToolbarState() {
+        let indexOffset = 0
+        const { start, end } = caretPositionRef.current
+        
+        for (const content of blockRef.current.contents) {
+            const isContentInStartPosition = (start <= indexOffset + content.text.length &&
+                start >= indexOffset)
+            const isContentAfterStartPosition = start <= indexOffset
+            const isContentInOrAfterStartPosition = isContentInStartPosition || isContentAfterStartPosition
+
+            if (isContentInOrAfterStartPosition) {
+                const isContentInEndPosition = end <= indexOffset + content.text.length &&
+                    end >= indexOffset
+            
+                const endIndexPositionOfContent = start - indexOffset
+                const doesStartPositionIsAtContent = endIndexPositionOfContent >= 0
+
+                const textToTheLeft = content.text.slice(0, doesStartPositionIsAtContent ? endIndexPositionOfContent : content.text.length)
+                console.log('textToTheLeft', textToTheLeft)
+                if (isContentInEndPosition) {
+                    const textToTheRight = content.text.slice(end - indexOffset, content.text.length)
+                    console.log('textToTheRight', textToTheRight)
+                    break
+                }
+            }
+            
+            indexOffset += content.text.length
+        }
+    }
+
 
     function retrieveContentCharacterIndexesByContentUUID() {
         const textCharacterIndexesByContentUUID = []
@@ -215,15 +276,15 @@ export default function RichTextBlockText(props) {
         if (isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current === false) {
             let indexOffset = 0
 
-            let isBold = false
-            let textSize = DEFAULT_TEXT_SIZE
-            let isItalic = false 
-            let isUnderline = false 
-            let isCode = false
-            let latexEquation = null 
-            let markerColor = null 
-            let textColor = null 
-            let link = null
+            let isBold = toolbarStateRef.current.isBold
+            let textSize = toolbarStateRef.current.textSize
+            let isItalic = toolbarObserverRef.current.isItalic
+            let isUnderline = toolbarStateRef.current.isUnderline
+            let isCode = toolbarStateRef.current.isCode
+            let latexEquation = toolbarStateRef.current.latexEquation
+            let markerColor = toolbarStateRef.current.markerColor
+            let textColor = toolbarStateRef.current.textColor
+            let link = toolbarStateRef.current.link
 
             const { start, end } = caretPositionRef.current
 
@@ -259,10 +320,15 @@ export default function RichTextBlockText(props) {
                     const isContentInEndPosition = (end <= indexOffset + content.text.length &&
                         end >= indexOffset)
                     if (isContentInEndPosition) {
-                        onUpdateToolbarState({
-                            isBold, isCode, isItalic, isUnderline, textColor, textSize, 
-                            latexEquation, markerColor, link
-                        })
+                        // Update the toolbar state with the state of the caret position
+                        toolbarStateRef.current = {
+                            isBold, textSize, isItalic, isUnderline, isCode, latexEquation, markerColor, textColor, link
+                        }
+                        
+                        const isToolbarObserverDefined = typeof toolbarObserverRef.current === 'function'
+                        if (isToolbarObserverDefined) {
+                            toolbarObserverRef.current(toolbarStateRef.current)
+                        }                
                         break
                     }
                 }
@@ -275,14 +341,16 @@ export default function RichTextBlockText(props) {
      * This is used to update the caretPositionRef so we can know where the caret is located
      * inside of the contentEditable container.
      */
-     function onUpdateCaretPosition(start, end, preventToUpdateCaretPositionOnSelectionChange=false) {
-        preventToUpdateCaretPositionOnSelectionChangeRef.current = preventToUpdateCaretPositionOnSelectionChange
-        previousCaretPositionRef.current = {
-            start: caretPositionRef.current.start,
-            end: caretPositionRef.current.end
+    function onUpdateCaretPosition(start, end, preventToUpdateCaretPositionOnSelectionChange=false) {
+        if (preventToUpdateCaretPositionOnSelectionChangeRef.current === false) {
+            preventToUpdateCaretPositionOnSelectionChangeRef.current = preventToUpdateCaretPositionOnSelectionChange
+            previousCaretPositionRef.current = {
+                start: caretPositionRef.current.start,
+                end: caretPositionRef.current.end
+            }
+            caretPositionRef.current = { start, end }
+            updateToolbarStateBasedOnCaretPosition()
         }
-        caretPositionRef.current = { start, end }
-        updateToolbarStateBasedOnCaretPosition()
     }
 
     /**
@@ -367,6 +435,9 @@ export default function RichTextBlockText(props) {
      * 
      * @param {number} startIndex - The index of the start of the selection.
      * @param {string} text - The text that was inserted inside of the text editor.
+     * 
+     * @returns {boolean} - Returns true if the toolbarParams are different from the content where the text
+     * is being inserted, false otherwise.
      */
     function userInsertedSomeText(startIndex, text) {
         let indexOffset = 0
@@ -406,11 +477,11 @@ export default function RichTextBlockText(props) {
                         text + content.text.substring(startIndexToInsert, content.text.length)
                 }
                 // We always modify just one content no matter the size of the text inserted.
-                break
+                return hasTheContentParametersChanged
             }
             indexOffset += content.text.length
         }
-
+        return false
     }
 
     /**
@@ -440,10 +511,11 @@ export default function RichTextBlockText(props) {
             const newContents = []
             let currentContent = blockRef.current.contents[0]
             for (let i=1; i<blockRef.current.contents.length; i++) {
-                const nextContent = blockRef.current.contents[i]
+                let nextContent = blockRef.current.contents[i]
                 const doesContentsHaveEqualParameters = checkIfContentsHaveTheSameParameters(
                     currentContent, nextContent
                 )
+
                 if (doesContentsHaveEqualParameters) {
                     const newContent = createNewContent({
                         order: newContents.length,
@@ -460,26 +532,25 @@ export default function RichTextBlockText(props) {
                     pushContentUUIDToTextCharacterIndexesByContentUUID(
                         newContent.uuid, newContent.text
                     )
-                    newContents.push(newContent)
-                    currentContent = newContent
+                    nextContent = newContent
                 } else {
                     pushContentUUIDToTextCharacterIndexesByContentUUID(
                         currentContent.uuid, currentContent.text
                     )
                     currentContent.order = newContents.length
                     newContents.push(currentContent)
-
-                    const isComparingLastContent = i === blockRef.current.contents.length - 1
-                    if (isComparingLastContent) {
-                        pushContentUUIDToTextCharacterIndexesByContentUUID(
-                            nextContent.uuid, nextContent.text
-                        )
-                        nextContent.order = newContents.length
-                        newContents.push(nextContent)
-                    }
-
-                    currentContent = nextContent
                 }
+
+                const isComparingLastContent = i === blockRef.current.contents.length - 1
+                if (isComparingLastContent) {
+                    pushContentUUIDToTextCharacterIndexesByContentUUID(
+                        nextContent.uuid, nextContent.text
+                    )
+                    nextContent.order = newContents.length
+                    newContents.push(nextContent)
+                }
+
+                currentContent = nextContent
             }
             blockRef.current.contents = newContents
             textCharacterIndexesByContentUUIDRef.current = textCharacterIndexesByContentUUID
@@ -492,15 +563,15 @@ export default function RichTextBlockText(props) {
      * This will handle whenever some text is inserted into the contenteditable container. By default the 
      * content editable does not have onChange event, so we need to handle that using the onInput event callback.
      * 
-     * @param {string} insertedText - The hole text inside of the contenteditable container. We will use the caret positions
+     * @param {string} fullText - The hole text inside of the contenteditable container. We will use the caret positions
      * to know where the text was inserted.
+     * @param {string} insertedText - The text that was inserted inside of the contenteditable or TextInput container.
      */
-    function onInput(insertedText) {
-        const { end: endIndexPositionChanged } = caretPositionRef.current
+    function onInput(fullText, insertedText) {
         const { start: startIndexPositionChanged } = previousCaretPositionRef.current
 
         const didUserDeleteAnyTextFromSelection = previousCaretPositionRef.current.start !== previousCaretPositionRef.current.end
-        const didUserJustDeleteTheText = insertedText.length < fullTextRef.current.length
+        const didUserJustDeleteTheText = fullText.length < fullTextRef.current.length
 
         if (didUserDeleteAnyTextFromSelection) {
             userDeletedSomeText(previousCaretPositionRef.current.start, previousCaretPositionRef.current.end)
@@ -508,25 +579,14 @@ export default function RichTextBlockText(props) {
             userDeletedSomeText(caretPositionRef.current.start, previousCaretPositionRef.current.end)
         }
 
-        // We know that the user has inserted some text on two conditions: 
-        // - He selected the text and then inserted some text
-        //      '-> On This case the start index of the previousCaretPosition should
-        //          be different than the start index of the caretPosition
-        // - He inserted some text without selecting anything from the text.
-        //      '-> We know that the user has inserted some text when the current
-        //          start inted caret position is bigger than the previous caret 
-        //          position start index
-        const didUserInsertAnyText = (didUserDeleteAnyTextFromSelection && 
-            previousCaretPositionRef.current.start !== caretPositionRef.current.start) || 
-            (caretPositionRef.current.start > previousCaretPositionRef.current.start)
+        const didUserInsertAnyText = insertedText !== null
 
         if (didUserInsertAnyText) {
-            const insertedCharacter = insertedText.substring(startIndexPositionChanged, endIndexPositionChanged)
-            userInsertedSomeText(startIndexPositionChanged, insertedCharacter)
+            userInsertedSomeText(startIndexPositionChanged, insertedText)
         }
 
-        updateFullText(insertedText)
-        tryToMergeEqualContents()     
+        updateFullText(fullText)
+        tryToMergeEqualContents()
     }
 
     return (

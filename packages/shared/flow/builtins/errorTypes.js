@@ -1,0 +1,15 @@
+module.exports = {
+    SYNTAX: 'SyntaxError',
+    TYPE: 'TypeError',
+    VALUE: 'ValueError',
+    ERROR: 'Error',
+    REF: 'ReferenceError',
+    KEY: 'KeyError',
+    ATTRIBUTE: 'AttributeError',
+    ZERO_DIVISION: 'ZeroDivisionError',
+    NUMBER_TOO_BIG: 'NumberTooBigError',
+    MEMORY_OVERFLOW: 'MemoryOverflowError',
+    NAME_ERROR: 'NameError',
+    INDEX_ERROR: 'IndexError',
+    INVALID_ARGUMENT: 'InvalidArgumentError',
+}
