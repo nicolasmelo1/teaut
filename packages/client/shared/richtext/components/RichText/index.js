@@ -31,7 +31,7 @@ export default function RichText(props) {
                 {
                     order: 1,
                     uuid: generateUUID(),
-                    text: 'Love ',
+                    text: 'Love with ',
                     textSize: 12,
                     isBold: true,
                     isItalic: false,

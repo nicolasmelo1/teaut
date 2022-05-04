@@ -2,3 +2,4 @@ export { default as useRouterOrNavigationRedirect } from './useRouterOrNavigatio
 export { default as useClickedOrPressedOutside } from './useClickedOrPressedOutside'
 export { default as useDebugWebView } from './useDebugWebView'
 export { default as useOpenFloatingDropdown } from './useOpenFloatingDropdown'
+export { default as useKeyboardShortcuts } from './useKeyboardShortcuts'

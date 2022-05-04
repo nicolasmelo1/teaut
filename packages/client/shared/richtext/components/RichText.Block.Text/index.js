@@ -21,11 +21,13 @@ export default function RichTextBlockText(props) {
     const inputElementRef = useRef(null)
     const fullTextRef = useRef(retrieveFullText())
     const blockRef = useRef(props.block)
+    const isBlockActiveRef = useRef(false)
     const caretPositionRef = useRef({ start: 0, end: 0 })
     const previousCaretPositionRef = useRef(caretPositionRef.current)
     const preventToUpdateCaretPositionOnSelectionChangeRef = useRef(false)
     const textCharacterIndexesByContentUUIDRef = useRef(retrieveContentCharacterIndexesByContentUUID())
     const isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef = useRef(false)
+    const isToPreventToolbarFromUpdatingRef = useRef(false)
 
     /**
      * This is a factory function used for creating new contents, if you look at the parameters
@@ -97,72 +99,267 @@ export default function RichTextBlockText(props) {
         toolbarObserverRef.current = toolbarObserver
     }
 
-    // TODO: TEMPORARY
+    /** 
+     * Function called whenever the user clicks on one of the items inside of the toolbar. When the user clicks
+     * we will automatically focus again on the input so we do not lose the focus inside of the input.
+     * 
+     * If the user has selected more than one character (this means that the user want to change the property of the text
+     * that he already typed instead of creating a new text) we will need to create new contents.
+     * 
+     * @param {object} toolbarState - The state of the toolbar, only set the options that the user clicks.
+     * @param {boolean | undefined} [toolbarState.isBold=undefined] - If the text should be bold.
+     * @param {number | undefined} [toolbarState.textSize=undefined] - If the text should be of a different size
+     * than the normal text.
+     * @param {boolean | undefined} [toolbarState.isItalic=undefined] - If the text should be italic.
+     * @param {boolean | undefined} [toolbarState.isUnderline=undefined] - If the text should be underlined.
+     * @param {boolean | undefined} [toolbarState.isCode=undefined] - If the text should be a styled code block.
+     * @param {string | null | undefined} [toolbarState.latexEquation=undefined] - If the text should be a latex equation.
+     * @param {string | null | undefined} [toolbarState.markerColor=undefined] - If the text should have a background color.
+     * @param {string | null | undefined} [toolbarState.textColor=undefined] - If the text should have a text color.
+     * @param {string | null | undefined} [toolbarState.link=undefined] - If the text should have a link.
+     */
     function onUpdateToolbarState({
         isBold=undefined, textSize=undefined, isItalic=undefined, isUnderline=undefined, isCode=undefined,
         latexEquation=undefined, markerColor=undefined, textColor=undefined, link=undefined
     }={}) {
-        inputElementRef.current.focus()
+        if (isBlockActiveRef.current) {
+            inputElementRef.current.focus()
 
-        isBold = typeof isBold === 'boolean' ? isBold : toolbarStateRef.current.isBold
-        textSize = typeof textSize === 'number' ? textSize : toolbarStateRef.current.textSize
-        isItalic = typeof isItalic === 'boolean' ? isItalic : toolbarStateRef.current.isItalic
-        isUnderline = typeof isUnderline === 'boolean' ? isUnderline : toolbarStateRef.current.isUnderline
-        isCode = typeof isCode === 'boolean' ? isCode : toolbarStateRef.current.isCode
-        latexEquation = typeof latexEquation === 'string' ? latexEquation : toolbarStateRef.current.latexEquation
-        markerColor = typeof markerColor === 'string' ? markerColor : toolbarStateRef.current.markerColor
-        textColor = typeof textColor === 'string' ? textColor : toolbarStateRef.current.textColor
-        link = typeof link === 'string' ? link : toolbarStateRef.current.link
+            const wasIsBoldDefined = typeof isBold === 'boolean'
+            const wasTextSizeDefined = typeof textSize === 'number'
+            const wasIsItalicDefined = typeof isItalic === 'boolean'
+            const wasIsUnderlineDefined = typeof isUnderline === 'boolean'
+            const wasIsCodeDefined = typeof isCode === 'boolean'
+            const wasLatexEquationDefined = typeof latexEquation === 'string'
+            const wasMarkerColorDefined = typeof markerColor === 'string'
+            const wasTextColorDefined = typeof textColor === 'string'
+            const wasLinkDefined = typeof link === 'string'
 
-        toolbarStateRef.current = {
-            isBold, textSize, isItalic, isUnderline, isCode, latexEquation, markerColor, textColor, link
-        }
-        
-        const isToolbarObserverDefined = typeof toolbarObserverRef.current === 'function'
-        if (isToolbarObserverDefined) {
-            toolbarObserverRef.current(toolbarStateRef.current)
-        }
-        
-        const hasUserSelectedAtLeastOneCharacter = caretPositionRef.current.start !== caretPositionRef.current.end
-        if (hasUserSelectedAtLeastOneCharacter) {
-            updateContentsAfterSelectingTextAndUpdatingToolbarState()
+            isBold = wasIsBoldDefined ? isBold : toolbarStateRef.current.isBold
+            textSize = wasTextSizeDefined ? textSize : toolbarStateRef.current.textSize
+            isItalic = wasIsItalicDefined ? isItalic : toolbarStateRef.current.isItalic
+            isUnderline = wasIsUnderlineDefined ? isUnderline : toolbarStateRef.current.isUnderline
+            isCode = wasIsCodeDefined ? isCode : toolbarStateRef.current.isCode
+            latexEquation = wasLatexEquationDefined ? latexEquation : toolbarStateRef.current.latexEquation
+            markerColor = wasMarkerColorDefined ? markerColor : toolbarStateRef.current.markerColor
+            textColor = wasTextColorDefined ? textColor : toolbarStateRef.current.textColor
+            link = wasLinkDefined ? link : toolbarStateRef.current.link
+
+            toolbarStateRef.current = {
+                isBold, textSize, isItalic, isUnderline, isCode, latexEquation, markerColor, textColor, link
+            }
+            
+            const isToolbarObserverDefined = typeof toolbarObserverRef.current === 'function'
+            if (isToolbarObserverDefined) {
+                toolbarObserverRef.current(toolbarStateRef.current)
+            }
+            
+            const hasUserSelectedAtLeastOneCharacter = caretPositionRef.current.start !== caretPositionRef.current.end
+            if (hasUserSelectedAtLeastOneCharacter) {
+                updateContentsAfterSelectingTextAndUpdatingToolbarState({
+                    hasChangedIsBold: wasIsBoldDefined, 
+                    hasChangedTextSize: wasTextSizeDefined, 
+                    hasChangedIsItalic: wasIsItalicDefined, 
+                    hasChangedIsUnderline: wasIsUnderlineDefined,
+                    hasChangedIsCode: wasIsCodeDefined, 
+                    hasChangedLatexEquation: wasLatexEquationDefined, 
+                    hasChangedMarkerColor: wasMarkerColorDefined, 
+                    hasChangedTextColor: wasTextColorDefined,
+                    hasChangedLink: wasLinkDefined
+                })
+                tryToMergeEqualContents()
+            }
+            isToPreventToolbarFromUpdatingRef.current = true
         }
     }
 
     /**
-     * This is used to update the contents when the user selects the 
+     * This is used to update the contents when the user changes the param of the toolbar. For example
+     * when he clicks the toolbar for the text to be bold, or to be italic, or to be underlined and whatever.
+     * 
+     * This is kinda complicated but i think that can be simplified.
+     * 
+     * We have 3 cases for strings that we need to cover when selecting the text:
+     * Imagine the following contents:
+     * |I'm in | Love with | Cats| (where "|" is the start and end of each content)
+     * 
+     * Case number 1: 
+     * - We select some part of the text inside of the same text (the hole text is not bold, and then we select
+     * some part to make it bold)
+     * 
+     * This case would be:
+     *              |---|
+     * |I'm in | Love with | Cats|
+     * 
+     * -> We are just selecting 'Love with' content, so we need to separete this content in three parts: The part from
+     * before: 'Lov', the part inside of the selection: 'e wi', and the part after the selection: 'th '.
+     * 
+     * Case number 2:
+     * - We select the middle of a content, to the middle of another content then we select for them to be bold.
+     * (one part is normal, the other is just italic, then we need to create 2 more contents: one will be just bold 
+     * and the other will be bold and italic)
+     * 
+     * This case would be:
+     *                  |------|
+     * |I'm in | Love with | Cats|
+     * 
+     * -> We are just selecting 'Love with' and ' Cats' contents, so from 2 contents we will end up with 4 contents:
+     * before: 'Love wi', the part inside of the selection: 'th ', the part from the left in the second content " Ca"
+     * and the part from the right in the second content "ts".
+     * 
+     * Case number 3:
+     * - We select more than two different contents, then we need to handle this content in the middle and modify it.
+     * (this case is a mix between case number 1 and 2)
+     * 
+     * @param {object} hasChangedToolbarParams - The params that have changed in the toolbar.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedIsBold=false] - Whether the bold param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedTextSize=false] - Whether the text size param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedIsItalic=false] - Whether the italic param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedIsUnderline=false] - Whether the underline param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedIsCode=false] - Whether the code param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedLatexEquation=false] - Whether the latex equation param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedMarkerColor=false] - Whether the marker color param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedTextColor=false] - Whether the text color param has changed.
+     * @param {boolean} [hasChangedToolbarParams.hasChangedLink=false] - Whether the link param has changed.
      */
-    function updateContentsAfterSelectingTextAndUpdatingToolbarState() {
+    function updateContentsAfterSelectingTextAndUpdatingToolbarState({
+        hasChangedIsBold=false, hasChangedTextSize=false, hasChangedIsItalic=false, hasChangedIsUnderline=false,
+        hasChangedIsCode=false, hasChangedLatexEquation=false, hasChangedMarkerColor=false, hasChangedTextColor=false,
+        hasChangedLink=false
+    }={}) {
+        function retrieveNewContentData(newText, content) {
+            return createNewContent({
+                text: newText,
+                isBold: hasChangedIsBold ? toolbarStateRef.current.isBold : content.isBold,
+                textSize: hasChangedTextSize ? toolbarStateRef.current.textSize : content.textSize,
+                isItalic: hasChangedIsItalic ? toolbarStateRef.current.isItalic : content.isItalic,
+                isUnderline: hasChangedIsUnderline ? toolbarStateRef.current.isUnderline : content.isUnderline,
+                isCode: hasChangedIsCode ? toolbarStateRef.current.isCode : content.isCode,
+                customMetadata: typeof content.customMetadata === 'object' && ![null, undefined].includes(content.customMetadata) ? 
+                    content.customMetadata : undefined,
+                latexEquation: hasChangedLatexEquation ? toolbarStateRef.current.latexEquation : content.latexEquation,
+                markerColor: hasChangedMarkerColor ? toolbarStateRef.current.markerColor : content.markerColor,
+                textColor: hasChangedTextColor ? toolbarStateRef.current.textColor : content.textColor,
+                link: hasChangedLink ? toolbarStateRef.current.link : content.link,
+            })
+        }
+
         let indexOffset = 0
+        const newContents = []
         const { start, end } = caretPositionRef.current
         
         for (const content of blockRef.current.contents) {
-            const isContentInStartPosition = (start <= indexOffset + content.text.length &&
-                start >= indexOffset)
-            const isContentAfterStartPosition = start <= indexOffset
-            const isContentInOrAfterStartPosition = isContentInStartPosition || isContentAfterStartPosition
+            const isContentInStartPosition = start >= indexOffset && start < indexOffset + content.text.length
+            const isContentInEndPosition = end > indexOffset && end <= indexOffset + content.text.length
+            const isContentInTheMiddleBettwenStartAndEnd = start <= indexOffset && end >= indexOffset + content.text.length
+            /**
+             * Think about this the following way:
+             * 
+             * I'm in | Love with | Cats
+             * 
+             * Imagine i selected from position 2 to 19 so
+             *     2                     19
+             *     |--------------------|
+             *  |I'm in | Love with | Cats|
+             *  0 ----- 7 ---------17 ----21
+             * 
+             * So let's understand:
+             * "Love with" indexOffest, which is 7, is less than the `start`, which is 2. 17 which 
+             * is indexOffest + content.text.length is greater than the `end`, which is 19. So we should consider it.
+             * "I'm in" indexOffset which is 0 is less than the `start`, which is 2. 7 which is indexOffset + content.text.length
+             * is greater than `start`, which is 2.
+             * "Cats" indexOffset which is 17 is less than the `end`, which is 19. 21 which is indexOffset + content.text.length
+             * is greater than the `end`, which is 19.
+             * 
+             * That's the hole idea on how we understand what is in the middle of the selection.
+             */
+            const isContentBetweenStartAndEndPosition = isContentInStartPosition ||
+                isContentInEndPosition || isContentInTheMiddleBettwenStartAndEnd
 
-            if (isContentInOrAfterStartPosition) {
-                const isContentInEndPosition = end <= indexOffset + content.text.length &&
-                    end >= indexOffset
-            
-                const endIndexPositionOfContent = start - indexOffset
-                const doesStartPositionIsAtContent = endIndexPositionOfContent >= 0
+            if (isContentBetweenStartAndEndPosition) {
+                const startPositionInContent = start - indexOffset
+                const endPositionInContent = end - indexOffset
 
-                const textToTheLeft = content.text.slice(0, doesStartPositionIsAtContent ? endIndexPositionOfContent : content.text.length)
-                console.log('textToTheLeft', textToTheLeft)
-                if (isContentInEndPosition) {
-                    const textToTheRight = content.text.slice(end - indexOffset, content.text.length)
-                    console.log('textToTheRight', textToTheRight)
-                    break
+                if (isContentInStartPosition || isContentInEndPosition) {
+                    if (isContentInEndPosition && isContentInStartPosition) {
+                        const textToTheLeft = content.text.substring(0, startPositionInContent)
+                        const textInTheMiddle = content.text.substring(startPositionInContent, endPositionInContent)
+                        const textToTheRight = content.text.substring(endPositionInContent, content.text.length)
+                        
+                        const textToTheLeftIsNotEmpty = textToTheLeft.length > 0
+                        const textInTheMiddleIsNotEmpty = textInTheMiddle.length > 0
+                        const textToTheRightIsNotEmpty = textToTheRight.length > 0
+                        
+                        if (textToTheLeftIsNotEmpty) {
+                            newContents.push(createNewContent({
+                                ...content,
+                                text: textToTheLeft,
+                            }))
+                        } 
+                        if (textInTheMiddleIsNotEmpty) {
+                            const contentInTheMiddle = retrieveNewContentData(textInTheMiddle, content)
+                            contentInTheMiddle.customMetadata = content.customMetadata
+                            newContents.push(contentInTheMiddle)
+                        } 
+                        if (textToTheRightIsNotEmpty) {
+                            newContents.push(createNewContent({
+                                ...content,
+                                text: textToTheRight,
+                            }))
+                        }
+                    } else if (isContentInStartPosition) {
+                        const textToTheLeft = content.text.substring(0, startPositionInContent)
+                        const textToTheRight = content.text.substring(startPositionInContent, content.text.length)
+
+                        const textToTheLeftIsNotEmpty = textToTheLeft.length > 0
+                        const textToTheRightIsNotEmpty = textToTheRight.length > 0
+
+                        if (textToTheLeftIsNotEmpty) {
+                            newContents.push(createNewContent({
+                                ...content,
+                                text: textToTheLeft,
+                            }))
+                        }
+                        if (textToTheRightIsNotEmpty) {
+                            newContents.push(retrieveNewContentData(textToTheRight, content))
+                        }
+                    } else {
+                        const textToTheLeft = content.text.substring(0, endPositionInContent)
+                        const textToTheRight = content.text.substring(endPositionInContent, content.text.length)
+
+                        const textToTheLeftIsNotEmpty = textToTheLeft.length > 0
+                        const textToTheRightIsNotEmpty = textToTheRight.length > 0
+
+                        if (textToTheLeftIsNotEmpty) {
+                            newContents.push(retrieveNewContentData(textToTheLeft, content))
+                        }
+                        if (textToTheRightIsNotEmpty) {
+                            newContents.push(createNewContent({
+                                ...content,
+                                text: textToTheRight,
+                            }))
+                        }
+                    }
+                } else {
+                    newContents.push(retrieveNewContentData(content.text, content))
                 }
+            } else {
+                newContents.push(content)
             }
-            
             indexOffset += content.text.length
         }
+        blockRef.current.contents = newContents
     }
 
-
+    /**
+     * handy function used to retrieve the new `textCharacterIndexesByContentUUID`. The `textCharacterIndexesByContentUUID`
+     * is an array of strings, each string is the content uuid. We use this to know which content is in which position
+     * inside of the text. So whenever we need to do something we can know exactly which content was modified instead of needing
+     * to rely on positions and indexes everytime.
+     * 
+     * @returns {Array<string>} - Returns the new `textCharacterIndexesByContentUUID`, which is an array of uuids
+     * where each uuid is the content uuid. We add this for every character inside of the text.
+     */
     function retrieveContentCharacterIndexesByContentUUID() {
         const textCharacterIndexesByContentUUID = []
         for (let contentIndex=0; contentIndex<props.block.contents.length; contentIndex++) {
@@ -201,6 +398,13 @@ export default function RichTextBlockText(props) {
         return fullText
     }
 
+    /**
+     * This is used to prevent the toolbar state from updating while the user types in the text input.
+     * 
+     * If the user has stoped typing we will update the toolbar state based on the caret position.
+     * 
+     * @param {boolean} isTyping - True if the user is typing and false otherwise.
+     */
     function updateToPreventToolbarStateChangeWhenTyping(
         isTyping=!isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current
     ) {
@@ -273,7 +477,10 @@ export default function RichTextBlockText(props) {
      * can function normally and well.
      */
     function updateToolbarStateBasedOnCaretPosition() {
-        if (isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current === false) {
+        if (
+            isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef.current === false && 
+            isToPreventToolbarFromUpdatingRef.current === false
+        ) {
             let indexOffset = 0
 
             let isBold = toolbarStateRef.current.isBold
@@ -324,22 +531,35 @@ export default function RichTextBlockText(props) {
                         toolbarStateRef.current = {
                             isBold, textSize, isItalic, isUnderline, isCode, latexEquation, markerColor, textColor, link
                         }
-                        
-                        const isToolbarObserverDefined = typeof toolbarObserverRef.current === 'function'
-                        if (isToolbarObserverDefined) {
+                        const canWeUpdateTheToolbarState = typeof toolbarObserverRef.current === 'function'
+                        if (canWeUpdateTheToolbarState) {
                             toolbarObserverRef.current(toolbarStateRef.current)
-                        }                
+                        }    
                         break
                     }
                 }
                 indexOffset += content.text.length
             }
+        } else { 
+            isToPreventToolbarFromUpdatingRef.current = false
         }
     }
 
     /**
      * This is used to update the caretPositionRef so we can know where the caret is located
      * inside of the contentEditable container.
+     * 
+     * We also use this to update the toolbar state based on the caret position inside of the contentEditable.
+     * 
+     * When we update the caret position, we also keep track of the previous caret position so this way
+     * we can know what changed.
+     * 
+     * @param {number} start - The start index position of the caret in the input. This is the index the select start 
+     * in the hole text.
+     * @param {number} end - The end index position of the caret in the input. THis is the index the select ends in 
+     * the hole text.
+     * @param {boolean} [preventToUpdateCaretPositionOnSelectionChange=false] - If this is true, we will not update the 
+     * caret position when the selection changes. This is useful to prevent calling this function twice.
      */
     function onUpdateCaretPosition(start, end, preventToUpdateCaretPositionOnSelectionChange=false) {
         if (preventToUpdateCaretPositionOnSelectionChangeRef.current === false) {
@@ -589,10 +809,19 @@ export default function RichTextBlockText(props) {
         tryToMergeEqualContents()
     }
 
+    function onFocus() {
+        isBlockActiveRef.current = true
+    }
+
+    function onBlur() {
+        isBlockActiveRef.current = false
+    }
+
     return (
         <Layout
         inputElementRef={inputElementRef}
         toolbarStateRef={toolbarStateRef}
+        isBlockActiveRef={isBlockActiveRef}
         blockRef={blockRef}
         preventToUpdateCaretPositionOnSelectionChangeRef={preventToUpdateCaretPositionOnSelectionChangeRef}
         caretPositionRef={caretPositionRef}
@@ -601,6 +830,8 @@ export default function RichTextBlockText(props) {
         onUpdateToolbarState={onUpdateToolbarState}
         onUpdateCaretPosition={onUpdateCaretPosition}
         onInput={onInput}
+        onFocus={onFocus}
+        onBlur={onBlur}
         />
     )
 }

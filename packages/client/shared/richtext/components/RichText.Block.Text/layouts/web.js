@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect, useRef } from 'react'
 import { renderToString } from 'react-dom/server'
 import { APP } from '../../../../conf'
 import { webGetSelectionSelectCursorPosition } from '../utils'
+import { useKeyboardShortcuts } from '../../../../core'
 import RichTextBlockTextContent from '../../RichText.Block.Text.Content'
 import Styled from '../styles'
 
@@ -36,6 +37,13 @@ export default function RichTextBlockTextWebLayout(props) {
     const isInCompositionRef = useRef(false)
     const isUserPressingEnterRef = useRef(false)
     const isToPreventSelectionBeingCalledBecauseRerenderingRef = useRef(false)
+    const cacheForWhenCompositionEndsRef = useRef(null)
+    
+    useKeyboardShortcuts({
+        'ctrl + b': () => {
+            if (props.isBlockActiveRef.current) onModifyAnyOfTheToolbarParams({isBold: !props.toolbarStateRef.current.isBold})
+        },
+    })
     
     /** 
      * This function is supposed to update the status if a composition is in progress or not.
@@ -43,6 +51,7 @@ export default function RichTextBlockTextWebLayout(props) {
      * @param {boolean} [isInComposition=!isInCompositionRef.current] - The status of the composition.
      */
      function onUpdateIsInCompositionStatus(isInComposition=!isInCompositionRef.current) {
+        console.log('onUpdateIsInCompositionStatus')
         props.preventToUpdateCaretPositionOnSelectionChangeRef.current = isInComposition === false
         isInCompositionRef.current = isInComposition
     }
@@ -64,7 +73,7 @@ export default function RichTextBlockTextWebLayout(props) {
         setCaretPosition(start, end)
         isToPreventSelectionBeingCalledBecauseRerenderingRef.current = false
     }
-
+    
     /**
      * This is a function used to set the caret position of the input element. Why we need this? Because after we update the
      * innerHTML from the inputElement in `updateDivWithoutUpdatingState` the caret position comes to the first character.
@@ -106,7 +115,7 @@ export default function RichTextBlockTextWebLayout(props) {
                 range.setStart(node, start - indexOffset)
             }
             if (isNodeTheEndingPositionOfTheSelection) {
-                range.setStart(node, end - indexOffset)
+                range.setEnd(node, end - indexOffset)
             }
             indexOffset += text.length
         }
@@ -138,6 +147,8 @@ export default function RichTextBlockTextWebLayout(props) {
      * insert the '˜' in the text. That's what 'hasUserInsertedATextAfterCompositionRef' is for.
      */
     function onCompositionEnd() {
+        console.log('onCompositionEnd')
+
         onUpdateIsInCompositionStatus(false)
         if (hasUserInsertedATextAfterCompositionRef.current === false) {
             const { start, end } = webGetSelectionSelectCursorPosition(props.inputElementRef.current)
@@ -148,6 +159,32 @@ export default function RichTextBlockTextWebLayout(props) {
             hasUserInsertedATextAfterCompositionRef.current = true
         }
     }
+
+    /**
+     * This function is called when the user clicks on the toolbar. For example, when the user wants to make the text bold, italic
+     * or underlined.
+     * 
+     * This wraps the `onUpdateToolbarState` props function so we don't do the hard work here, the only idea of this function is to
+     * rerender the text input with the new state whenever the user modifies some param.
+     * 
+     * @param {object} toolbarState - The state of the toolbar, only set the options that the user clicks.
+     * @param {boolean | undefined} [toolbarState.isBold=undefined] - If the text should be bold.
+     * @param {number | undefined} [toolbarState.textSize=undefined] - If the text should be of a different size
+     * than the normal text.
+     * @param {boolean | undefined} [toolbarState.isItalic=undefined] - If the text should be italic.
+     * @param {boolean | undefined} [toolbarState.isUnderline=undefined] - If the text should be underlined.
+     * @param {boolean | undefined} [toolbarState.isCode=undefined] - If the text should be a styled code block.
+     * @param {string | null | undefined} [toolbarState.latexEquation=undefined] - If the text should be a latex equation.
+     * @param {string | null | undefined} [toolbarState.markerColor=undefined] - If the text should have a background color.
+     * @param {string | null | undefined} [toolbarState.textColor=undefined] - If the text should have a text color.
+     * @param {string | null | undefined} [toolbarState.link=undefined] - If the text should have a link.
+     */
+    function onModifyAnyOfTheToolbarParams(toolbarParamsState) {
+        const hasUserSelectedAtLeastOneCharacter = props.caretPositionRef.current.start !== props.caretPositionRef.current.end
+        props.onUpdateToolbarState(toolbarParamsState)
+        if (hasUserSelectedAtLeastOneCharacter) updateDivWithoutUpdatingState()
+    }
+
     /**
      * We try to do the leas    
      * Reference for all of the inputTypes: https://rawgit.com/w3c/input-events/v1/index.html#interface-InputEvent-Attributes
@@ -167,6 +204,8 @@ export default function RichTextBlockTextWebLayout(props) {
         }
         
         const insertedText = didHitEnterWithShift ? '\n' : hasUserInsertedSomeText ? e.nativeEvent.data : null
+        console.log('onInput')
+
         if (didSimplyHitEnter === false) {
             const isNotInComposition = isInCompositionRef.current === false
             if (isNotInComposition) {
@@ -276,6 +315,8 @@ export default function RichTextBlockTextWebLayout(props) {
             draggable={false}
             suppressContentEditableWarning={true}
             contentEditable={true}
+            onFocus={() => props.onFocus()}
+            onBlur={() => props.onBlur()}
             onClick={() => onSelectionChange()}
             onCompositionStart={() => onUpdateIsInCompositionStatus(true)}
             onCompositionEnd={(e) => onCompositionEnd(e)}
@@ -295,7 +336,7 @@ export default function RichTextBlockTextWebLayout(props) {
             <RichTextBlockTextToolbarWebLayout
             registerToolbarStateObserver={props.registerToolbarStateObserver}
             initialToolbarParams={props.toolbarStateRef.current}
-            onUpdateToolbarState={props.onUpdateToolbarState}
+            onUpdateToolbarState={onModifyAnyOfTheToolbarParams}
             />
         </Fragment>
     )

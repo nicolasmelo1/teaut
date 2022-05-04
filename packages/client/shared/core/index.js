@@ -5,5 +5,6 @@ export {
     useClickedOrPressedOutside, 
     useRouterOrNavigationRedirect,
     useDebugWebView,
-    useOpenFloatingDropdown
+    useOpenFloatingDropdown,
+    useKeyboardShortcuts
 } from './hooks'
