@@ -35,10 +35,6 @@ export default function RichTextBlockTextWebLayout(props) {
         isInCompositionRef.current = isInComposition
     }
 
-    function retrieveCaretPixelPosition() {
-        console.log('retrieveCaretPixelPosition')
-    }
-
     /**
      * This is used so we can update the contents of the block at EVERY type of the user. This way it makes
      * it A LOT easier for us to handle when the user selects to make the text bold, italic, underlined and
@@ -340,7 +336,6 @@ export default function RichTextBlockTextWebLayout(props) {
             />
             {props.isBlockActive === true ? (
                 <RichTextBlockTextToolbar
-                retrieveCaretPixelPosition={retrieveCaretPixelPosition}
                 registerToolbarStateObserver={props.registerToolbarStateObserver}
                 initialToolbarParams={props.toolbarStateRef.current}
                 onUpdateToolbarState={onModifyAnyOfTheToolbarParams}

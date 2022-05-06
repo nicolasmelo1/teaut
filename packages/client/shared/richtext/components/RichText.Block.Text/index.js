@@ -874,7 +874,9 @@ export default function RichTextBlockText(props) {
                     if (isTextToTheLeftEmpty === false) {
                         content.text = textToTheLeftOfTheCaret
                         newContentsOfCurrentBlock.push(content)
-                    } 
+                    } else {
+                        newContentsOfCurrentBlock.push(createNewContent({text: ''}))
+                    }
 
                     if (isTextToTheRightEmpty === false) {
                         const newContent = createNewContent({...content, text: textToTheRightOfTheCaret})
