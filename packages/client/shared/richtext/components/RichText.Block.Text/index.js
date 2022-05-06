@@ -1,11 +1,12 @@
-import { useRef } from 'react'
-import { APP } from '../../../conf'
+import { useRef, useState, useEffect } from 'react'
 import { generateUUID } from '../../../../../shared/utils'
 import Layout from './layouts'
 
 const DEFAULT_TEXT_SIZE = 12
 
 export default function RichTextBlockText(props) {
+    const [isBlockActive, _setIsBlockActive] = useState(props.activeBlockUUID === props.block.uuid)
+
     const toolbarStateRef = useRef({
         isBold: false,
         textSize: DEFAULT_TEXT_SIZE, 
@@ -21,13 +22,19 @@ export default function RichTextBlockText(props) {
     const inputElementRef = useRef(null)
     const fullTextRef = useRef(retrieveFullText())
     const blockRef = useRef(props.block)
-    const isBlockActiveRef = useRef(false)
+    const isBlockActiveRef = useRef(isBlockActive)
+    const isToPreventBlockFromBecomingInactiveRef = useRef(false)
     const caretPositionRef = useRef({ start: 0, end: 0 })
     const previousCaretPositionRef = useRef(caretPositionRef.current)
     const preventToUpdateCaretPositionOnSelectionChangeRef = useRef(false)
     const textCharacterIndexesByContentUUIDRef = useRef(retrieveContentCharacterIndexesByContentUUID())
     const isTypingSoPreventToUpdateToolbarStateBasedOnCaretPositionRef = useRef(false)
     const isToPreventToolbarFromUpdatingRef = useRef(false)
+
+    function setIsBlockActive(isActive) {
+        isBlockActiveRef.current = isActive
+        _setIsBlockActive(isActive)
+    }
 
     /**
      * This is a factory function used for creating new contents, if you look at the parameters
@@ -76,6 +83,15 @@ export default function RichTextBlockText(props) {
             link
         }
     }
+
+    function createTextBlock() {
+        return {
+            uuid: generateUUID(),
+            blockTypeId: 1,
+            order: 0,
+            contents: []
+        }
+    }
     
     /**
      * This is used to register the toolbarObserver, toolbarObserser is a function that will 
@@ -122,7 +138,7 @@ export default function RichTextBlockText(props) {
         isBold=undefined, textSize=undefined, isItalic=undefined, isUnderline=undefined, isCode=undefined,
         latexEquation=undefined, markerColor=undefined, textColor=undefined, link=undefined
     }={}) {
-        if (isBlockActiveRef.current) {
+        if (isBlockActiveRef.current === true) {
             inputElementRef.current.focus()
 
             const wasIsBoldDefined = typeof isBold === 'boolean'
@@ -559,7 +575,8 @@ export default function RichTextBlockText(props) {
      * @param {number} end - The end index position of the caret in the input. THis is the index the select ends in 
      * the hole text.
      * @param {boolean} [preventToUpdateCaretPositionOnSelectionChange=false] - If this is true, we will not update the 
-     * caret position when the selection changes. This is useful to prevent calling this function twice.
+     * caret position when the selection changes. This is useful to prevent calling this function twice. Calling the function twice
+     * will mess up with the caret position (we will not have the previous and current caret position right).
      */
     function onUpdateCaretPosition(start, end, preventToUpdateCaretPositionOnSelectionChange=false) {
         if (preventToUpdateCaretPositionOnSelectionChangeRef.current === false) {
@@ -809,13 +826,115 @@ export default function RichTextBlockText(props) {
         tryToMergeEqualContents()
     }
 
+    /**
+     * This function is called whenever we focus on the input, this will make the text block active and we will automatically focus
+     * on it if it's not yet focused.
+     */
     function onFocus() {
-        isBlockActiveRef.current = true
+        props.onToggleActiveBlock(blockRef.current.uuid)
+        setIsBlockActive(true)
     }
 
+    /**
+     * This will be called when the text input loses the focus, for example, when he clicked away, or on another block or whatever.
+     * This will make the block inactive and we will toggle it to be inactive.
+     * 
+     * Sometimes we need to prevent the component from losing focus so we use this. For example when the user clicks on the toolbar.
+     */
     function onBlur() {
-        isBlockActiveRef.current = false
+        if (isToPreventBlockFromBecomingInactiveRef.current === false) {
+            props.onToggleActiveBlock(null)
+            setIsBlockActive(false)
+        }
+        isToPreventBlockFromBecomingInactiveRef.current = false
     }
+
+    function onAddBlockBelow() {
+        const newContentsOfCurrentBlock = []
+        const newBlock = createTextBlock()
+
+        const didTheUserHitEnterOnASelection = previousCaretPositionRef.current.start !== previousCaretPositionRef.current.end
+        if (didTheUserHitEnterOnASelection) {
+            userDeletedSomeText(previousCaretPositionRef.current.start, previousCaretPositionRef.current.end)
+            tryToMergeEqualContents()
+        }
+        
+        let indexOffset = 0
+        for (const content of blockRef.current.contents) {
+            const doesContentGoesToTheNextBlock = indexOffset + content.text.length >= previousCaretPositionRef.current.start 
+            const originalContentText = content.text
+            if (doesContentGoesToTheNextBlock) {
+                const offsetToSeparateText = previousCaretPositionRef.current.start - indexOffset
+                if (offsetToSeparateText > 0) {
+                    const textToTheLeftOfTheCaret = content.text.slice(0, previousCaretPositionRef.current.start - indexOffset)
+                    const textToTheRightOfTheCaret = content.text.slice(previousCaretPositionRef.current.start - indexOffset, content.text.length)
+                    const isTextToTheLeftEmpty = textToTheLeftOfTheCaret.length === 0
+                    const isTextToTheRightEmpty = textToTheRightOfTheCaret.length === 0
+
+                    if (isTextToTheLeftEmpty === false) {
+                        content.text = textToTheLeftOfTheCaret
+                        newContentsOfCurrentBlock.push(content)
+                    } 
+
+                    if (isTextToTheRightEmpty === false) {
+                        const newContent = createNewContent({...content, text: textToTheRightOfTheCaret})
+                        newContent.order = newBlock.contents.length
+                        newBlock.contents.push(newContent)
+                    } else {
+                        newBlock.contents.push(createNewContent({text: ''}))
+                    }
+                } else {
+                    const newContent = createNewContent({...content, text: originalContentText})
+                    newContent.order = newBlock.contents.length
+                    newBlock.contents.push(newContent)
+                }
+            } else {
+                newContentsOfCurrentBlock.push(content)
+            }
+
+            indexOffset += originalContentText.length
+        }
+
+        blockRef.current.contents = newContentsOfCurrentBlock
+        props.onToggleActiveBlock(newBlock.uuid)
+        setIsBlockActive(false)
+        props.onAddBlock(newBlock)
+    }
+
+    /**
+     * Removes the block
+     */
+    function onRemoveBlock() {
+        const blocksOfContext = props.retrieveBlocks()
+        const isBlockNOTTheFirstOne = blocksOfContext[0].uuid !== blockRef.current.uuid
+        const isCaretInTheFirstPosition = caretPositionRef.current.start === 0 && caretPositionRef.current.end === 0
+
+        if (isBlockNOTTheFirstOne && isCaretInTheFirstPosition) {
+            let blockBefore = blocksOfContext[0]
+            for (let i=1; i < blocksOfContext.length; i++) {
+                const blockToCheck = blocksOfContext[i]
+                const isBlockToCheckThisBlock = blockToCheck.uuid === blockRef.current.uuid
+                
+                if (isBlockToCheckThisBlock) break
+                else blockBefore = blockToCheck 
+            }
+            // TODO: Check if block before is a text block.
+
+            for (const contentToAddInPreviousBlock of blockRef.current.contents) {
+                blockBefore.contents.push(contentToAddInPreviousBlock)
+            }
+
+            props.onToggleActiveBlock(blockBefore.uuid)
+            props.onRemoveBlock(blockRef.current.uuid)
+        }
+    }
+
+    useEffect(() => {
+        const isActiveBlockThisBlock = props.activeBlockUUID === props.block.uuid
+        if (isActiveBlockThisBlock) {
+            setIsBlockActive(true)
+        }
+    }, [props.activeBlockUUID])
 
     return (
         <Layout
@@ -823,12 +942,18 @@ export default function RichTextBlockText(props) {
         toolbarStateRef={toolbarStateRef}
         isBlockActiveRef={isBlockActiveRef}
         blockRef={blockRef}
+        isToPreventBlockFromBecomingInactiveRef={isToPreventBlockFromBecomingInactiveRef}
         preventToUpdateCaretPositionOnSelectionChangeRef={preventToUpdateCaretPositionOnSelectionChangeRef}
         caretPositionRef={caretPositionRef}
+        previousCaretPositionRef={previousCaretPositionRef}
+        isBlockActive={isBlockActive}
+        retrieveBlocks={props.retrieveBlocks}
         registerToolbarStateObserver={registerToolbarStateObserver}
         updateToPreventToolbarStateChangeWhenTyping={updateToPreventToolbarStateChangeWhenTyping}
         onUpdateToolbarState={onUpdateToolbarState}
         onUpdateCaretPosition={onUpdateCaretPosition}
+        onAddBlockBelow={onAddBlockBelow}
+        onRemoveBlock={onRemoveBlock}
         onInput={onInput}
         onFocus={onFocus}
         onBlur={onBlur}

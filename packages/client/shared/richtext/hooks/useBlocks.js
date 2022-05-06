@@ -78,7 +78,7 @@ export default function useBlocks(blocks=[], onChangeBlocks=(blocks) => {}) {
         const isIndexToAddDefined = typeof indexToAdd === 'number'
         
         if (isIndexToAddDefined) {
-            blocksRef.current.splice(indexToAdd, 0, block)
+            blocksRef.current.splice(indexToAdd+1, 0, block)
         } else {
             block.order = blocksRef.current.length
             blocksRef.current.push(block)
@@ -106,6 +106,16 @@ export default function useBlocks(blocks=[], onChangeBlocks=(blocks) => {}) {
     }
 
     /**
+     * Retrieve all of the blocks when needed instead of passing it as props and triggering a rerender
+     * unecessarily.
+     * 
+     * @returns {object} - Returns a list of all of the blocks in the current context (the text editor or another block)
+     */
+    function retrieveBlocks() {
+        return blocksRef.current
+    }
+
+    /**
      * This will update the local blocks ref with the external blocks data.
      */
     useEffect(() => {
@@ -118,6 +128,7 @@ export default function useBlocks(blocks=[], onChangeBlocks=(blocks) => {}) {
     return {
         onUpdateBlock,
         onAddBlock,
-        onRemoveBlock
+        onRemoveBlock,
+        retrieveBlocks
     }
 }

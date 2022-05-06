@@ -24,8 +24,12 @@ export default function RichTextBlocks(props) {
     return (
         <Layout
         block={block}
+        activeBlockUUID={props.activeBlockUUID}
+        retrieveBlocks={props.retrieveBlocks}
+        onAddBlock={props.onAddBlock}
         onUpdateBlock={onUpdateBlock}
         onRemoveBlock={props.onRemoveBlock}
+        onToggleActiveBlock={props.onToggleActiveBlock}
         />
     )
 }

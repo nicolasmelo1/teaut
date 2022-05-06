@@ -88,7 +88,8 @@ export default function RichText(props) {
     const {
         onUpdateBlock,
         onAddBlock,
-        onRemoveBlock
+        onRemoveBlock,
+        retrieveBlocks
     } = useBlocks(richTextData.blocks, (blocks) => setRichTextData({...richTextData, blocks}))
 
     /**
@@ -132,6 +133,7 @@ export default function RichText(props) {
         isEditable={isEditable}
         richTextData={richTextData}
         activeBlockUUID={activeBlockUUID}
+        retrieveBlocks={retrieveBlocks}
         onRemoveBlock={onRemoveBlock}
         onUpdateBlock={onUpdateBlock}
         onAddBlock={onAddBlock}

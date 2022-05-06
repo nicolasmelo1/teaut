@@ -109,8 +109,8 @@ function GlobalProviderInitializer() {
  * the memory of the application. So when the user opens again we are able to load data from this state.
  * 
  * @param {string} contextName - The name of the context that we want to get the state for.
- * @param {object} initialState - The initialState so if we add some new data in the state it does not break. This means is that
- * suppose we have the following state in the context:
+ * @param {object} initialState - The initialState so if we add some new data in the state it does not break. This means 
+ * is that suppose we have the following state in the context:
  * ```
  * state = {
  *   selectedApp: null,
@@ -123,17 +123,20 @@ function GlobalProviderInitializer() {
  *   selectedArea: {}
  * }
  * ```
- * The state in the persist storage will be the first state but what about the `selectedArea` that we added? That's why we need the initial state.
+ * The state in the persist storage will be the first state but what about the `selectedArea` that we 
+ * added? That's why we need the initial state.
  * We will add the initial state to the state retrieved.
  * 
- * @param {(state: any) => void} [setState=undefined] - The callback that will be called when the state is retrieved. The problem is that you don't 
- * have much control with this method, this will only pass the state to the callback if the state is neither null nor undefined.
+ * @param {(state: any) => void} [setState=undefined] - The callback that will be called when the state is retrieved. 
+ * The problem is that you don't have much control with this method, this will only pass the state to the callback if 
+ * the state is neither null nor undefined.
  * 
  * @returns {Promise<object>} - The state of the context.
  */
 export async function getPersistState(contextName, initialState, setState = undefined) {
     let state = null
-    if (APP === 'web' && window.localStorage !== undefined && localStorage !== undefined) {
+    const doesLocalStorageExists = window.localStorage !== undefined && localStorage !== undefined
+    if (APP === 'web' && doesLocalStorageExists) {
         const rawState = localStorage.getItem(contextName)
         if (rawState !== null) {
             state = JSON.parse(rawState)

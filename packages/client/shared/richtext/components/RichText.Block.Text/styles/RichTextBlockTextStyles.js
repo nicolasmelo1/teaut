@@ -1,8 +1,17 @@
 import { APP } from '../../../../conf'
 import styled from 'styled-components'
-import { TextInput } from 'react-native'
+import { View, TextInput as RNTextInput } from 'react-native'
 
-export const TextContainer = APP === 'web' ? 
+export const TextContainer = APP === 'web' ?
+styled.div`
+    display: flex;
+    flex-direction: row;
+    position: relative;
+`
+:
+styled(View)``
+
+export const TextInput = APP === 'web' ? 
 styled.div`
     display: inline-block;
     white-space: pre-wrap;
@@ -12,4 +21,4 @@ styled.div`
     outline: none !important;
 `
 :
-styled(TextInput)``
+styled(RNTextInput)``

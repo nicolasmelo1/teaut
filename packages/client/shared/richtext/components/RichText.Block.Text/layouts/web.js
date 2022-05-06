@@ -3,42 +3,22 @@ import { renderToString } from 'react-dom/server'
 import { APP } from '../../../../conf'
 import { webGetSelectionSelectCursorPosition } from '../utils'
 import { useKeyboardShortcuts } from '../../../../core'
+import RichTextBlockTextToolbar from '../../RichText.Block.Text.Toolbar'
 import RichTextBlockTextContent from '../../RichText.Block.Text.Content'
 import Styled from '../styles'
 
 const DEFAULT_TEXT_SIZE = 12
-
-function RichTextBlockTextToolbarWebLayout(props) {
-    const [toolbarParams, setToolbarParams] = useState(props.initialToolbarParams)
-
-    useEffect(() => {
-        props.registerToolbarStateObserver(setToolbarParams)
-    }, [])
-    return (
-        <div>
-            <button
-            style={{
-                fontWeight: toolbarParams.isBold ? 'bold' : 'normal',
-            }}
-            onClick={() => props.onUpdateToolbarState({isBold: !toolbarParams.isBold})}
-            >
-                B
-            </button>
-        </div>
-    )
-}
 
 
 /**
  * Since this component has too many web specific logic we can add the web specific logic inside of the layout itself.
  */
 export default function RichTextBlockTextWebLayout(props) {
-    const hasUserInsertedATextAfterCompositionRef = useRef(true)
     const isInCompositionRef = useRef(false)
     const isUserPressingEnterRef = useRef(false)
     const isToPreventSelectionBeingCalledBecauseRerenderingRef = useRef(false)
     const cacheForWhenCompositionEndsRef = useRef(null)
-    
+
     useKeyboardShortcuts({
         'ctrl + b': () => {
             if (props.isBlockActiveRef.current) onModifyAnyOfTheToolbarParams({isBold: !props.toolbarStateRef.current.isBold})
@@ -50,10 +30,13 @@ export default function RichTextBlockTextWebLayout(props) {
      * 
      * @param {boolean} [isInComposition=!isInCompositionRef.current] - The status of the composition.
      */
-     function onUpdateIsInCompositionStatus(isInComposition=!isInCompositionRef.current) {
-        console.log('onUpdateIsInCompositionStatus')
+    function onUpdateIsInCompositionStatus(isInComposition=!isInCompositionRef.current) {
         props.preventToUpdateCaretPositionOnSelectionChangeRef.current = isInComposition === false
         isInCompositionRef.current = isInComposition
+    }
+
+    function retrieveCaretPixelPosition() {
+        console.log('retrieveCaretPixelPosition')
     }
 
     /**
@@ -145,19 +128,14 @@ export default function RichTextBlockTextWebLayout(props) {
      * 
      * But what if we do 'n˜' and do not type 'a'? Then 'onCompositionEnd' will be called on process number 2 and we will
      * insert the '˜' in the text. That's what 'hasUserInsertedATextAfterCompositionRef' is for.
+     * 
+     * When the composition ends what we do is call the onInput again with the cache of the event. This way it is easier
+     * to add the text, just use the onInput function.
      */
     function onCompositionEnd() {
-        console.log('onCompositionEnd')
-
         onUpdateIsInCompositionStatus(false)
-        if (hasUserInsertedATextAfterCompositionRef.current === false) {
-            const { start, end } = webGetSelectionSelectCursorPosition(props.inputElementRef.current)
-            props.onUpdateCaretPosition(start, end, true)
-            props.onInput(props.inputElementRef.current.textContent)
-            updateDivWithoutUpdatingState()
-
-            hasUserInsertedATextAfterCompositionRef.current = true
-        }
+        props.preventToUpdateCaretPositionOnSelectionChangeRef.current = false
+        onInput(cacheForWhenCompositionEndsRef.current)
     }
 
     /**
@@ -180,6 +158,7 @@ export default function RichTextBlockTextWebLayout(props) {
      * @param {string | null | undefined} [toolbarState.link=undefined] - If the text should have a link.
      */
     function onModifyAnyOfTheToolbarParams(toolbarParamsState) {
+        props.isToPreventBlockFromBecomingInactiveRef.current = true
         const hasUserSelectedAtLeastOneCharacter = props.caretPositionRef.current.start !== props.caretPositionRef.current.end
         props.onUpdateToolbarState(toolbarParamsState)
         if (hasUserSelectedAtLeastOneCharacter) updateDivWithoutUpdatingState()
@@ -197,19 +176,16 @@ export default function RichTextBlockTextWebLayout(props) {
         const didTheUserHitDeleteOrBackspace = e.nativeEvent.inputType.includes('delete')
         const hasUserInsertedSomeText = ![null, undefined, ''].includes(e.nativeEvent.data) && 
             didTheUserHitDeleteOrBackspace === false
-
+        
         if (isInCompositionRef.current === false) {
-            const { start, end } = webGetSelectionSelectCursorPosition(e.target)
+            const { start, end } = webGetSelectionSelectCursorPosition(props.inputElementRef.current)
             props.onUpdateCaretPosition(start, end)
         }
-        
-        const insertedText = didHitEnterWithShift ? '\n' : hasUserInsertedSomeText ? e.nativeEvent.data : null
-        console.log('onInput')
 
+        const insertedText = didHitEnterWithShift ? '\n' : hasUserInsertedSomeText ? e.nativeEvent.data : null
         if (didSimplyHitEnter === false) {
             const isNotInComposition = isInCompositionRef.current === false
             if (isNotInComposition) {
-                hasUserInsertedATextAfterCompositionRef.current = true
                 props.onInput(e.target.textContent, insertedText)
                 
                 if (
@@ -219,17 +195,31 @@ export default function RichTextBlockTextWebLayout(props) {
                     updateDivWithoutUpdatingState()
                 }
             } else {
-                hasUserInsertedATextAfterCompositionRef.current = false
+                cacheForWhenCompositionEndsRef.current = e
             }
         } else {
             e.preventDefault()
             updateDivWithoutUpdatingState()
+            props.onAddBlockBelow()
         }
-
-        if (isInCompositionRef.current === true) isInCompositionRef.current = false
     }
+
     /**
-     * This is used to retrieve the inner html contents of the contentEditable container. We prevent 
+     * This is used so when the user presses the backspace in the keyboard we can delete the block and merge
+     * it's contents with the block before.
+     * 
+     * @param {KeyboardEvent} e - This is the event that is fired when the user clicks on the keyboard.
+     */
+    function onCheckIfUserPressedBackspaceInInitialPositionAndRemoveContent(e) {
+        const hasUserPressedBackspace = e.key === 'Backspace'
+  
+        if (hasUserPressedBackspace) {
+            props.onRemoveBlock()
+        }
+    }
+
+    /**
+     * This is used to retrieve the inner html contents of the contentEditable container.
      */
      function getInnerHTML() {
         let innerHTML = ``
@@ -299,7 +289,7 @@ export default function RichTextBlockTextWebLayout(props) {
         }
        props.preventToUpdateCaretPositionOnSelectionChangeRef.current = false
     }
-
+    
     useEffect(() => {
         document.addEventListener('selectionchange', onSelectionChange)
         return () => {
@@ -307,9 +297,23 @@ export default function RichTextBlockTextWebLayout(props) {
         }
     }, [])
 
+    useEffect(() => {
+        if (props.isBlockActive) {
+            props.inputElementRef.current.focus()
+            const isStartAndEndPositionDefined = typeof props.previousCaretPositionRef.current.start === 'number' && 
+                typeof props.previousCaretPositionRef.current.start === 'number'
+            const isStartAndEndPositionDifferentThanZero = props.previousCaretPositionRef.current.start !== 0 && 
+                props.previousCaretPositionRef.current.start !== 0
+            
+            if (isStartAndEndPositionDefined && isStartAndEndPositionDifferentThanZero) {
+                setCaretPosition(props.previousCaretPositionRef.current.start, props.previousCaretPositionRef.current.end)
+            }
+        }
+    }, [props.isBlockActive])
+
     return (
-        <Fragment>
-            <Styled.TextContainer
+        <Styled.TextContainer>
+            <Styled.TextInput
             ref={props.inputElementRef}
             spellCheck={true}
             draggable={false}
@@ -323,6 +327,7 @@ export default function RichTextBlockTextWebLayout(props) {
             onKeyDown={(e) => {
                 isUserPressingEnterRef.current = e.key === 'Enter'
                 props.updateToPreventToolbarStateChangeWhenTyping(true)
+                onCheckIfUserPressedBackspaceInInitialPositionAndRemoveContent(e)
             }}
             onKeyUp={(e) => {
                 isUserPressingEnterRef.current = false
@@ -333,11 +338,14 @@ export default function RichTextBlockTextWebLayout(props) {
                 __html: getInnerHTML()
             }}
             />
-            <RichTextBlockTextToolbarWebLayout
-            registerToolbarStateObserver={props.registerToolbarStateObserver}
-            initialToolbarParams={props.toolbarStateRef.current}
-            onUpdateToolbarState={onModifyAnyOfTheToolbarParams}
-            />
-        </Fragment>
+            {props.isBlockActive === true ? (
+                <RichTextBlockTextToolbar
+                retrieveCaretPixelPosition={retrieveCaretPixelPosition}
+                registerToolbarStateObserver={props.registerToolbarStateObserver}
+                initialToolbarParams={props.toolbarStateRef.current}
+                onUpdateToolbarState={onModifyAnyOfTheToolbarParams}
+                />
+            ) : null}
+        </Styled.TextContainer>
     )
 }

@@ -5,13 +5,16 @@ export default function RichTextWebLayout(props) {
     return (
         <Styled.Container>
             <Styled.Page>
-                {props.richTextData.blocks.map(block => (
+                {props.richTextData.blocks.map((block, index) => (
                     <RichTextBlock
                     key={block.uuid} 
                     block={block} 
-                    onAddBlock={props.onAddBlock}
+                    activeBlockUUID={props.activeBlockUUID}
+                    retrieveBlocks={props.retrieveBlocks}
+                    onAddBlock={(blockData) => props.onAddBlock(blockData, index)}
                     onRemoveBlock={props.onRemoveBlock}
                     onUpdateBlock={props.onUpdateBlock}
+                    onToggleActiveBlock={props.onToggleActiveBlock}
                     />
                 ))}
             </Styled.Page>
