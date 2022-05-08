@@ -139,17 +139,15 @@ export default function RichTextBlockText(props) {
         latexEquation=undefined, markerColor=undefined, textColor=undefined, link=undefined
     }={}) {
         if (isBlockActiveRef.current === true) {
-            inputElementRef.current.focus()
-
             const wasIsBoldDefined = typeof isBold === 'boolean'
             const wasTextSizeDefined = typeof textSize === 'number'
             const wasIsItalicDefined = typeof isItalic === 'boolean'
             const wasIsUnderlineDefined = typeof isUnderline === 'boolean'
             const wasIsCodeDefined = typeof isCode === 'boolean'
-            const wasLatexEquationDefined = typeof latexEquation === 'string'
-            const wasMarkerColorDefined = typeof markerColor === 'string'
-            const wasTextColorDefined = typeof textColor === 'string'
-            const wasLinkDefined = typeof link === 'string'
+            const wasLatexEquationDefined = typeof latexEquation === 'string' || latexEquation === null
+            const wasMarkerColorDefined = typeof markerColor === 'string' || markerColor === null
+            const wasTextColorDefined = typeof textColor === 'string' || textColor === null
+            const wasLinkDefined = typeof link === 'string' || link === null
 
             isBold = wasIsBoldDefined ? isBold : toolbarStateRef.current.isBold
             textSize = wasTextSizeDefined ? textSize : toolbarStateRef.current.textSize
@@ -161,6 +159,7 @@ export default function RichTextBlockText(props) {
             textColor = wasTextColorDefined ? textColor : toolbarStateRef.current.textColor
             link = wasLinkDefined ? link : toolbarStateRef.current.link
 
+            console.log(link)
             toolbarStateRef.current = {
                 isBold, textSize, isItalic, isUnderline, isCode, latexEquation, markerColor, textColor, link
             }
@@ -805,6 +804,10 @@ export default function RichTextBlockText(props) {
      * @param {string} insertedText - The text that was inserted inside of the contenteditable or TextInput container.
      */
     function onInput(fullText, insertedText) {
+        const isTheCommandKeyPressed = insertedText === '/' && blockRef.current.contents.length === 1 && 
+            blockRef.current.contents[0].text.length === 0
+
+        if (isTheCommandKeyPressed) {}
         const { start: startIndexPositionChanged } = previousCaretPositionRef.current
 
         const didUserDeleteAnyTextFromSelection = previousCaretPositionRef.current.start !== previousCaretPositionRef.current.end
@@ -827,6 +830,34 @@ export default function RichTextBlockText(props) {
     }
 
     /**
+     * This function is called inside of the toolbar usually. The idea is that this prevents the block from becoming
+     * inactive when the onBlur is called inside of the contenteditable element.
+     * 
+     * This is used mostly for web but can be handy for mobile as well.
+     * 
+     * @param {boolean} isToPreventFromBecomingInactive - If true, the block will not be set as inactive when the `onBlur`
+     * event is called.
+     */
+    function onToggleToPreventBlockFromBecomingInactive(
+        isToPreventFromBecomingInactive=!isToPreventBlockFromBecomingInactiveRef.current
+    ) {
+        isToPreventBlockFromBecomingInactiveRef.current = isToPreventFromBecomingInactive
+    }
+
+    /**
+     * Sometimes we want to prevent the caret from being moved, we want to keep it in place, for this we use this
+     * function.
+     * 
+     * @param {boolean} isToPreventToUpdateCaretPositionOnSelectionChange - If true, the `onUpdateCaretPosition` function
+     * will not update the caret position.
+     */
+    function onTogglePreventToUpdateCaretPositionOnSelectionChange(
+        isToPreventToUpdateCaretPositionOnSelectionChange=!preventToUpdateCaretPositionOnSelectionChangeRef.current
+    ) {
+        preventToUpdateCaretPositionOnSelectionChangeRef.current = isToPreventToUpdateCaretPositionOnSelectionChange
+    }
+
+    /**
      * This function is called whenever we focus on the input, this will make the text block active and we will automatically focus
      * on it if it's not yet focused.
      */
@@ -846,6 +877,7 @@ export default function RichTextBlockText(props) {
             props.onToggleActiveBlock(null)
             setIsBlockActive(false)
         }
+
         isToPreventBlockFromBecomingInactiveRef.current = false
     }
 
@@ -904,7 +936,8 @@ export default function RichTextBlockText(props) {
     }
 
     /**
-     * Removes the block
+     * Removes the current block from the editor. This is fired when the user presses backspace on an empty text. This will change 
+     * the previous block to be active. If there is any text on the right, then it will be merged with the previous block.
      */
     function onRemoveBlock() {
         const blocksOfContext = props.retrieveBlocks()
@@ -949,9 +982,13 @@ export default function RichTextBlockText(props) {
         caretPositionRef={caretPositionRef}
         previousCaretPositionRef={previousCaretPositionRef}
         isBlockActive={isBlockActive}
+        setIsBlockActive={setIsBlockActive}
+        onToggleActiveBlock={props.onToggleActiveBlock}
         retrieveBlocks={props.retrieveBlocks}
         registerToolbarStateObserver={registerToolbarStateObserver}
         updateToPreventToolbarStateChangeWhenTyping={updateToPreventToolbarStateChangeWhenTyping}
+        onToggleToPreventBlockFromBecomingInactive={onToggleToPreventBlockFromBecomingInactive}
+        onTogglePreventToUpdateCaretPositionOnSelectionChange={onTogglePreventToUpdateCaretPositionOnSelectionChange}
         onUpdateToolbarState={onUpdateToolbarState}
         onUpdateCaretPosition={onUpdateCaretPosition}
         onAddBlockBelow={onAddBlockBelow}

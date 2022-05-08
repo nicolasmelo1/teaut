@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { renderToString } from 'react-dom/server'
 import { APP } from '../../../../conf'
 import { webGetSelectionSelectCursorPosition } from '../utils'
@@ -8,12 +8,11 @@ import RichTextBlockTextContent from '../../RichText.Block.Text.Content'
 import Styled from '../styles'
 
 const DEFAULT_TEXT_SIZE = 12
-
-
 /**
  * Since this component has too many web specific logic we can add the web specific logic inside of the layout itself.
  */
 export default function RichTextBlockTextWebLayout(props) {
+    const containerRef = useRef()
     const isInCompositionRef = useRef(false)
     const isUserPressingEnterRef = useRef(false)
     const isToPreventSelectionBeingCalledBecauseRerenderingRef = useRef(false)
@@ -23,6 +22,16 @@ export default function RichTextBlockTextWebLayout(props) {
         'ctrl + b': () => {
             if (props.isBlockActiveRef.current) onModifyAnyOfTheToolbarParams({isBold: !props.toolbarStateRef.current.isBold})
         },
+        'ctrl + i': () => {
+            if (props.isBlockActiveRef.current) onModifyAnyOfTheToolbarParams({isItalic: !props.toolbarStateRef.current.isItalic})
+        },
+        'ctrl + u': () => {
+            if (props.isBlockActiveRef.current) onModifyAnyOfTheToolbarParams({isUnderline: !props.toolbarStateRef.current.isUnderline})
+        },
+        'ctrl + l': () => {
+            const isLinkDefined = typeof props.toolbarStateRef.current.link === 'string'
+            if (props.isBlockActiveRef.current && isLinkDefined) onModifyAnyOfTheToolbarParams({link: null})
+        }
     })
     
     /** 
@@ -153,11 +162,11 @@ export default function RichTextBlockTextWebLayout(props) {
      * @param {string | null | undefined} [toolbarState.textColor=undefined] - If the text should have a text color.
      * @param {string | null | undefined} [toolbarState.link=undefined] - If the text should have a link.
      */
-    function onModifyAnyOfTheToolbarParams(toolbarParamsState) {
+    function onModifyAnyOfTheToolbarParams(toolbarParamsState, isToPreventRerender=false) {
         props.isToPreventBlockFromBecomingInactiveRef.current = true
         const hasUserSelectedAtLeastOneCharacter = props.caretPositionRef.current.start !== props.caretPositionRef.current.end
         props.onUpdateToolbarState(toolbarParamsState)
-        if (hasUserSelectedAtLeastOneCharacter) updateDivWithoutUpdatingState()
+        if (hasUserSelectedAtLeastOneCharacter && isToPreventRerender === false) updateDivWithoutUpdatingState()
     }
 
     /**
@@ -286,10 +295,37 @@ export default function RichTextBlockTextWebLayout(props) {
        props.preventToUpdateCaretPositionOnSelectionChangeRef.current = false
     }
     
+    /**
+     * Function that will deactivate the block when the user clicks outside of the contentEditable container. This 
+     * also means that if the user clicks outside the toolbar then the block will be deactivated.
+     * 
+     * @param {MouseEvent} e - This is the event that is fired when the user clicks on the document.
+     */
+    function onDeactivateBlockWhenClickOutsideOfTheContainer(e) {
+        const doesContainerDoesNotContainTheClickedElement = !containerRef.current.contains(e.target)
+        if (doesContainerDoesNotContainTheClickedElement) {
+            props.onToggleActiveBlock(null)
+            props.setIsBlockActive(false)
+        } else {
+            const isAnchorTagClicked = e.target.tagName === 'A'
+            const isAnchorTagClickedAndHasLink = e.target.href !== ''
+            if (isAnchorTagClicked && isAnchorTagClickedAndHasLink) {
+                const fakeAnchor = document.createElement('a')
+                fakeAnchor.href = e.target.href
+                fakeAnchor.target = '_blank'
+                fakeAnchor.rel = 'noopener noreferrer'
+                fakeAnchor.click()
+            }
+                
+        }
+    }
+
     useEffect(() => {
         document.addEventListener('selectionchange', onSelectionChange)
+        document.addEventListener('mousedown', onDeactivateBlockWhenClickOutsideOfTheContainer)
         return () => {
             document.removeEventListener('selectionchange', onSelectionChange)
+            document.removeEventListener('mousedown', onDeactivateBlockWhenClickOutsideOfTheContainer)
         }
     }, [])
 
@@ -308,9 +344,12 @@ export default function RichTextBlockTextWebLayout(props) {
     }, [props.isBlockActive])
 
     return (
-        <Styled.TextContainer>
+        <Styled.TextContainer
+        ref={containerRef}
+        >
             <Styled.TextInput
             ref={props.inputElementRef}
+            defaultTextSize={DEFAULT_TEXT_SIZE}
             spellCheck={true}
             draggable={false}
             suppressContentEditableWarning={true}
@@ -336,7 +375,12 @@ export default function RichTextBlockTextWebLayout(props) {
             />
             {props.isBlockActive === true ? (
                 <RichTextBlockTextToolbar
+                inputElementRef={props.inputElementRef}
                 registerToolbarStateObserver={props.registerToolbarStateObserver}
+                onToggleToPreventBlockFromBecomingInactive={props.onToggleToPreventBlockFromBecomingInactive}
+                onTogglePreventToUpdateCaretPositionOnSelectionChange={
+                    props.onTogglePreventToUpdateCaretPositionOnSelectionChange
+                }
                 initialToolbarParams={props.toolbarStateRef.current}
                 onUpdateToolbarState={onModifyAnyOfTheToolbarParams}
                 />

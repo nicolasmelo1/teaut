@@ -40,7 +40,7 @@ export default function Tooltip(props) {
     const placement = Array.isArray(props.placement) ? props.placement : typeof props.placement === 'string' ? [props.placement] : ['left', 'right', 'top', 'bottom']
     const trigger = Array.isArray(props.trigger) ? props.trigger : ['hover', 'click']
     const text = typeof props.text === 'string' ? props.text : ''
-    const tooltipBackgroundColor = typeof props.color === 'string' ? props.color : theme.gray_REFLOW
+    const tooltipBackgroundColor = typeof props.color === 'string' ? props.color : theme.black
     const customContent = ![null, undefined].includes(props.customContent) ? props.customContent : null
     const isToShowArrows = typeof props.isToShowArrows === 'boolean' ? props.isToShowArrows : true
 

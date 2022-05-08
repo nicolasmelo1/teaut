@@ -45,7 +45,7 @@ export const ContentContainer = APP === 'web' ?
 styled.div`
     display: flex;
     background-color: ${props => props.tooltipBackgroundColor};
-    color: ${props => props.theme.clearGray};
+    color: ${props => props.theme.lightGray};
     padding: 10px;
     border-radius: 5px;
     box-shadow: rgb(56 66 95 / 8%) 4px 4px 12px;
@@ -105,7 +105,7 @@ export const ContentText = APP === 'web' ?
 styled.small`
     user-select: none;
     margin: 0;
-    color: ${props => whiteOrBlackColor(props.tooltipBackgroundColor) === 'black' ? props.theme.gray_REFLOW : props.theme.clearGray}
+    color: ${props => whiteOrBlackColor(props.tooltipBackgroundColor) === 'black' ? props.theme.black : props.theme.white}
 `
 :
 styled(Text)``

@@ -1,6 +1,6 @@
 let API_HOST = ''
 let BEARER = 'Client'
-let LANGUAGE = 'pt-BR'
+let LANGUAGE = 'en-US'
 const APP = process.env['APP'] === 'web' ? 'web' : 'mobile' 
 
 /**
@@ -17,7 +17,7 @@ const APP = process.env['APP'] === 'web' ? 'web' : 'mobile'
  * You probably know them as `Bearer`, but here we use `Client`.
  * @param {string} [configurationOptions.language='pt-BR'] - The language that will be used on the application.
  */
-function configureConf({ apiHost, bearer='Client', language='pt-BR' } = {}) {
+function configureConf({ apiHost, bearer='Client', language='en-US' } = {}) {
     API_HOST = apiHost
     BEARER = bearer,
     LANGUAGE = language

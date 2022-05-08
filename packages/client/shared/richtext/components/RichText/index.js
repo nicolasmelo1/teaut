@@ -56,7 +56,7 @@ export default function RichText(props) {
                     latexEquation: null,
                     markerColor: null,
                     textColor: null,
-                    link: null
+                    link: 'http://www.google.com'
                 }]
             },
             {

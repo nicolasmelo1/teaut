@@ -1,7 +1,9 @@
 const ptBR = require('./pt-BR')
+const enUS = require('./en-US')
 
 const languagePack = {
-    'pt-BR': ptBR
+    'pt-BR': ptBR,
+    'en-US': enUS
 }
 
 /**
@@ -20,7 +22,7 @@ const languagePack = {
  * 
  * @returns {string} - The text label to use in your component.
  */
-function strings(key, language='pt-BR', environment='shared') {
+function strings(key, language='en-US', environment='shared') {
     if (languagePack[language] && languagePack[language][environment] && languagePack[language][environment][key]) {
         return languagePack[language][environment][key]
     } else {

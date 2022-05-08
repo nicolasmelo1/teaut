@@ -16,7 +16,7 @@ styled.div`
     display: inline-block;
     white-space: pre-wrap;
     word-break: break-word;
-    font-size: 32px;
+    font-size: ${props => props.defaultTextSize}pt;
     padding: 5px;
     width: 100%;
     outline: none !important;
