@@ -128,6 +128,15 @@ export default function RichText(props) {
         }
     }
 
+    function retrieveAvailableBlocks() {
+        return [
+            {
+                group_type: 'basic',
+                
+            }
+        ]
+    }
+
     return (
         <Layout
         isEditable={isEditable}
